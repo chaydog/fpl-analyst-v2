@@ -66,6 +66,17 @@ def main():
     # 5. Upload predictions to Supabase
     print(f"\n--- Uploading {len(pred_1gw)} predictions to Supabase ---")
 
+    def safe_float(val, default=0.0):
+        """Convert to float, replacing NaN/Inf with default."""
+        import math
+        try:
+            f = float(val)
+            if math.isnan(f) or math.isinf(f):
+                return default
+            return f
+        except (TypeError, ValueError):
+            return default
+
     predictions_rows = []
     for _, row in pred_1gw.iterrows():
         team_id = int(row.get("team", 0))
@@ -77,25 +88,25 @@ def main():
             "team_code": team_code_map.get(team_id, 0),
             "element_type": int(row["element_type"]),
             "now_cost": int(row["now_cost"]),
-            "predicted_pts_1gw": round(float(row["predicted_points"]), 3),
-            "predicted_pts_5gw": round(float(row["predicted_pts_5gw"]), 3),
-            "form": round(float(row.get("form", 0) or 0), 2),
-            "xgi_per90": round(float(row.get("xgi_per90", 0) or 0), 3),
+            "predicted_pts_1gw": round(safe_float(row["predicted_points"]), 3),
+            "predicted_pts_5gw": round(safe_float(row["predicted_pts_5gw"]), 3),
+            "form": round(safe_float(row.get("form", 0)), 2),
+            "xgi_per90": round(safe_float(row.get("xgi_per90", 0)), 3),
             "is_penalty_taker": bool(row.get("is_penalty_taker", False)),
             "is_set_piece_taker": bool(row.get("is_set_piece_taker", False)),
-            "rolling_3_points": round(float(row.get("rolling_3_points", 0) or 0), 2),
-            "rolling_5_minutes": round(float(row.get("rolling_5_minutes", 0) or 0), 1),
-            "avg_minutes_5": round(float(row.get("avg_minutes_5", 0) or 0), 1),
-            "start_rate_5": round(float(row.get("start_rate_5", 0) or 0), 3),
-            "opponent_difficulty": int(row.get("opponent_difficulty", 3) or 3),
+            "rolling_3_points": round(safe_float(row.get("rolling_3_points", 0)), 2),
+            "rolling_5_minutes": round(safe_float(row.get("rolling_5_minutes", 0)), 1),
+            "avg_minutes_5": round(safe_float(row.get("avg_minutes_5", 0)), 1),
+            "start_rate_5": round(safe_float(row.get("start_rate_5", 0)), 3),
+            "opponent_difficulty": int(safe_float(row.get("opponent_difficulty", 3), 3)),
             "is_home": bool(row.get("is_home", False)),
             "has_fixture": bool(row.get("has_fixture", True)),
-            "chance_of_playing": round(float(row.get("chance_of_playing", 1.0) or 1.0), 2),
-            "selected_by_percent": round(float(row.get("selected_by_percent", 0) or 0), 1),
-            "yellow_cards": int(row.get("yellow_card_total", 0) or 0),
+            "chance_of_playing": round(safe_float(row.get("chance_of_playing", 1.0), 1.0), 2),
+            "selected_by_percent": round(safe_float(row.get("selected_by_percent", 0)), 1),
+            "yellow_cards": int(safe_float(row.get("yellow_card_total", 0))),
             "suspension_risk": bool(row.get("suspension_risk", False)),
             "returning_from_injury": bool(row.get("returning_from_injury", False)),
-            "n_fixtures_in_gw": int(row.get("n_fixtures_in_gw", 1) or 1),
+            "n_fixtures_in_gw": int(safe_float(row.get("n_fixtures_in_gw", 1), 1)),
             "status": str(row.get("status", "a") or "a"),
         })
 
@@ -119,7 +130,7 @@ def main():
             gw_rows.append({
                 "player_id": int(row["player_id"]),
                 "gameweek": int(gw),
-                "predicted_pts": round(float(row["predicted_points"]), 3),
+                "predicted_pts": round(safe_float(row["predicted_points"]), 3),
             })
 
     # Clear and reinsert
