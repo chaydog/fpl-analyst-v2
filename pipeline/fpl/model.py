@@ -109,6 +109,28 @@ class PointsPredictor:
         if "has_fixture" in features_df.columns:
             predictions *= features_df["has_fixture"]
 
+        # DGW multiplier: players with 2 fixtures score roughly 2x
+        # Use 1.85x (not 2x) as players often get less minutes in DGWs
+        if "n_fixtures_in_gw" in features_df.columns:
+            dgw_mult = features_df["n_fixtures_in_gw"].clip(lower=1)
+            dgw_mult = dgw_mult.map(lambda x: 1.85 if x >= 2 else 1.0)
+            predictions *= dgw_mult
+
+        # Injury return dampener: players back from injury underperform
+        # Apply 15% reduction in first GW back, 8% in second, 3% in third
+        if "returning_from_injury" in features_df.columns and "gws_since_return" in features_df.columns:
+            dampener = features_df["gws_since_return"].map(
+                lambda g: 0.85 if g <= 1 else 0.92 if g <= 2 else 0.97 if g <= 3 else 1.0
+            )
+            returning = features_df["returning_from_injury"] == 1
+            predictions.loc[returning] *= dampener.loc[returning]
+
+        # Suspension risk: if player is 1 yellow from a ban, reduce by 5%
+        # (small chance they get booked and miss next match)
+        if "suspension_risk" in features_df.columns:
+            at_risk = features_df["suspension_risk"] == 1
+            predictions.loc[at_risk] *= 0.95
+
         return predictions.clip(lower=0)
 
     def feature_importance(self, position: int) -> pd.DataFrame:

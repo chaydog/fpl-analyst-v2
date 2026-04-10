@@ -25,6 +25,10 @@ CREATE TABLE IF NOT EXISTS predictions (
   chance_of_playing  REAL DEFAULT 1.0,
   selected_by_percent REAL,
   status             TEXT,
+  yellow_cards       INT DEFAULT 0,
+  suspension_risk    BOOLEAN DEFAULT FALSE,
+  returning_from_injury BOOLEAN DEFAULT FALSE,
+  n_fixtures_in_gw   INT DEFAULT 1,
   updated_at         TIMESTAMPTZ DEFAULT NOW()
 );
 

@@ -39,6 +39,15 @@ class FeatureBuilder:
         # Minutes availability
         df = self._add_availability_features(df)
 
+        # Injury return detection
+        df = self._add_injury_return_features(df)
+
+        # Yellow card suspension risk
+        df = self._add_card_features(df)
+
+        # DGW multiplier (for training data)
+        df = self._add_dgw_features(df)
+
         # Target
         df["target"] = df["total_points"]
 
@@ -87,6 +96,12 @@ class FeatureBuilder:
         # Availability features
         latest = self._add_availability_features(latest)
 
+        # Injury return detection
+        latest = self._add_injury_return_features(latest)
+
+        # Yellow card / suspension risk
+        latest = self._add_prediction_card_features(latest)
+
         if "chance_of_playing_next_round" in latest.columns:
             latest["chance_of_playing"] = pd.to_numeric(
                 latest["chance_of_playing_next_round"], errors="coerce"
@@ -130,6 +145,8 @@ class FeatureBuilder:
         )
         base = self._add_set_piece_features(base)
         base = self._add_availability_features(base)
+        base = self._add_injury_return_features(base)
+        base = self._add_prediction_card_features(base)
 
         if "chance_of_playing_next_round" in base.columns:
             base["chance_of_playing"] = pd.to_numeric(
@@ -185,6 +202,12 @@ class FeatureBuilder:
             "is_penalty_taker", "is_set_piece_taker",
             # Availability
             "avg_minutes_5", "start_rate_5",
+            # Injury return
+            "returning_from_injury", "gws_since_return",
+            # Cards / suspension
+            "yellow_card_total", "suspension_risk",
+            # DGW
+            "n_fixtures_in_gw",
         ]
 
     def _add_rolling_features(self, df: pd.DataFrame, shift: bool = True) -> pd.DataFrame:
@@ -358,6 +381,14 @@ class FeatureBuilder:
         # Has fixture flag (blank GW check)
         df["has_fixture"] = df["team"].map(lambda t: int(t) in team_fixture).astype(int)
 
+        # DGW: count fixtures per team in this GW
+        fixture_counts = {}
+        for _, f in gw_fixtures.iterrows():
+            for tid in [int(f["team_h"]), int(f["team_a"])]:
+                fixture_counts[tid] = fixture_counts.get(tid, 0) + 1
+
+        df["n_fixtures_in_gw"] = df["team"].map(lambda t: fixture_counts.get(int(t), 0))
+
         return df
 
     def _add_set_piece_features(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -393,6 +424,113 @@ class FeatureBuilder:
         df["start_rate_5"] = grouped["minutes"].transform(
             lambda x: (x.shift(1) > 0).rolling(5, min_periods=1).mean()
         )
+        return df
+
+    def _add_injury_return_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Detect players returning from injury/absence.
+
+        Players typically underperform for 2-3 GWs after returning.
+        We detect this by looking for gaps in minutes played.
+        """
+        if "minutes" not in df.columns:
+            df["returning_from_injury"] = 0
+            df["gws_since_return"] = 99
+            return df
+
+        grouped = df.groupby("player_id")
+
+        # Was the player absent (0 mins) in any of the last 3 GWs?
+        def calc_return_status(group):
+            mins = group["minutes"].values
+            n = len(mins)
+            results = np.zeros(n)
+            gws_since = np.full(n, 99.0)
+
+            for i in range(1, n):
+                # Check if player missed any of last 3 GWs
+                lookback = mins[max(0, i - 3):i]
+                if len(lookback) > 0 and any(m == 0 for m in lookback) and mins[i] > 0:
+                    results[i] = 1
+                    # How many GWs since the absence ended
+                    zeros = [j for j in range(max(0, i - 5), i) if mins[j] == 0]
+                    if zeros:
+                        gws_since[i] = i - max(zeros)
+
+            return pd.DataFrame({
+                "returning_from_injury": results,
+                "gws_since_return": gws_since,
+            }, index=group.index)
+
+        result = grouped.apply(calc_return_status).reset_index(level=0, drop=True)
+        df["returning_from_injury"] = result["returning_from_injury"]
+        df["gws_since_return"] = result["gws_since_return"]
+
+        return df
+
+    def _add_card_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Track yellow card accumulation for suspension risk.
+
+        FPL rules: 5 yellows before GW19 = 1 match ban.
+        10 yellows in a season = 2 match ban.
+        """
+        if "yellow_cards" not in df.columns:
+            df["yellow_card_total"] = 0
+            df["suspension_risk"] = 0
+            return df
+
+        grouped = df.groupby("player_id")
+
+        # Cumulative yellows up to (but not including) current GW
+        df["yellow_card_total"] = grouped["yellow_cards"].transform(
+            lambda x: x.shift(1).cumsum().fillna(0)
+        )
+
+        # Suspension risk: 1 if on 4 yellows (one away from ban before GW19)
+        # or 9 yellows (one away from 2-match ban)
+        df["suspension_risk"] = (
+            ((df["yellow_card_total"] == 4) & (df.get("round", pd.Series(dtype=int)) < 19)) |
+            (df["yellow_card_total"] == 9)
+        ).astype(int)
+
+        return df
+
+    def _add_prediction_card_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Add card features for prediction using season aggregate data."""
+        # Use season total from players DataFrame
+        yc_map = self.players.set_index("id")["yellow_cards"].to_dict() if "yellow_cards" in self.players.columns else {}
+        pid_col = "player_id" if "player_id" in df.columns else "id"
+
+        df["yellow_card_total"] = df[pid_col].map(lambda x: yc_map.get(x, 0)).fillna(0)
+
+        next_gw = self._get_next_gw()
+        df["suspension_risk"] = (
+            ((df["yellow_card_total"] == 4) & (next_gw < 19)) |
+            (df["yellow_card_total"] == 9)
+        ).astype(int)
+
+        return df
+
+    def _add_dgw_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Count fixtures per team per GW for DGW detection."""
+        # Build fixture count per (team, gw)
+        fixture_counts = {}
+        for _, f in self.fixtures.iterrows():
+            gw = f.get("event")
+            if pd.isna(gw):
+                continue
+            gw = int(gw)
+            for team_id in [int(f["team_h"]), int(f["team_a"])]:
+                key = (team_id, gw)
+                fixture_counts[key] = fixture_counts.get(key, 0) + 1
+
+        if "round" in df.columns and "team" in df.columns:
+            df["n_fixtures_in_gw"] = df.apply(
+                lambda r: fixture_counts.get((int(r["team"]), int(r["round"])), 1),
+                axis=1,
+            )
+        else:
+            df["n_fixtures_in_gw"] = 1
+
         return df
 
     def _get_next_gw(self) -> int:

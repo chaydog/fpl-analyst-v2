@@ -92,6 +92,10 @@ def main():
             "has_fixture": bool(row.get("has_fixture", True)),
             "chance_of_playing": round(float(row.get("chance_of_playing", 1.0) or 1.0), 2),
             "selected_by_percent": round(float(row.get("selected_by_percent", 0) or 0), 1),
+            "yellow_cards": int(row.get("yellow_card_total", 0) or 0),
+            "suspension_risk": bool(row.get("suspension_risk", False)),
+            "returning_from_injury": bool(row.get("returning_from_injury", False)),
+            "n_fixtures_in_gw": int(row.get("n_fixtures_in_gw", 1) or 1),
             "status": str(row.get("status", "a") or "a"),
         })
 
