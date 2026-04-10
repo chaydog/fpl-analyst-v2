@@ -20,8 +20,39 @@ SUPABASE_URL = os.environ["SUPABASE_URL"]
 SUPABASE_KEY = os.environ["SUPABASE_KEY"]
 
 
+def is_between_gameweeks() -> bool:
+    """Check if we're between gameweeks (current GW finished, next not started).
+    Returns True if safe to run pipeline, False if matches are in progress."""
+    import requests
+    resp = requests.get("https://fantasy.premierleague.com/api/bootstrap-static/")
+    resp.raise_for_status()
+    events = resp.json()["events"]
+
+    current = next((e for e in events if e["is_current"]), None)
+    if not current:
+        return True  # season not started or ended, safe to run
+
+    # If current GW is finished, we're between GWs
+    if current["finished"]:
+        return True
+
+    # If current GW is not finished, matches may still be in progress
+    # Check if data_checked is true (all matches for today are done / no matches today)
+    if current.get("data_checked"):
+        return True
+
+    return False
+
+
 def main():
     print("=== FPL Pipeline Starting ===")
+
+    # Skip if matches are in progress (unless forced)
+    force = os.environ.get("FORCE_RUN", "").lower() == "true"
+    if not force and not is_between_gameweeks():
+        print("Gameweek in progress - skipping pipeline. Set FORCE_RUN=true to override.")
+        return
+
     sb = create_client(SUPABASE_URL, SUPABASE_KEY)
 
     # 1. Pull data from FPL API
