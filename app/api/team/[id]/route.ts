@@ -96,6 +96,11 @@ export async function GET(
     const nextGw = pipelineRun?.next_gw ?? latestGw + 1;
     const updatedAt = pipelineRun?.run_at ?? null;
 
+    // Get deadline from FPL API bootstrap
+    const bootstrap = await (await fetch("https://fantasy.premierleague.com/api/bootstrap-static/", { next: { revalidate: 3600 } })).json();
+    const nextGwEvent = bootstrap.events?.find((e: { id: number }) => e.id === nextGw);
+    const deadlineTime = nextGwEvent?.deadline_time ?? null;
+
     // Starting XI
     const lineup1 = selectStarting11(squad, 1);
     const lineup5 = selectStarting11(squad, 5);
@@ -109,7 +114,7 @@ export async function GET(
     const chips = history.chips || [];
     const chipsAvailable = getChipsAvailable(chips, nextGw);
 
-    // Fixtures for DGW/BGW detection + chip planning
+    // Fixtures for DGW/BGW detection + chip planning + fixture ticker
     const { data: fixtures } = await getSupabase().from("fixtures").select("*").eq("finished", false);
     const fixtureList = (fixtures || []).map((f) => ({
       gameweek: f.gameweek,
@@ -118,6 +123,35 @@ export async function GET(
       finished: f.finished,
     }));
     const schedule = detectDgwBgw(fixtureList, nextGw);
+
+    // Build fixture ticker: next 5 fixtures per player in squad
+    const fixtureTicker: Record<number, Array<{ gw: number; opponent: string; difficulty: number; is_home: boolean }>> = {};
+    const upcomingFixtures = (fixtures || [])
+      .filter((f) => f.gameweek >= nextGw)
+      .sort((a, b) => a.gameweek - b.gameweek);
+
+    for (const player of squad) {
+      const playerFixtures: Array<{ gw: number; opponent: string; difficulty: number; is_home: boolean }> = [];
+      for (const f of upcomingFixtures) {
+        if (playerFixtures.length >= 5) break;
+        if (f.team_h === player.team_id) {
+          playerFixtures.push({
+            gw: f.gameweek,
+            opponent: f.team_a_name,
+            difficulty: f.team_h_difficulty,
+            is_home: true,
+          });
+        } else if (f.team_a === player.team_id) {
+          playerFixtures.push({
+            gw: f.gameweek,
+            opponent: f.team_h_name,
+            difficulty: f.team_a_difficulty,
+            is_home: false,
+          });
+        }
+      }
+      fixtureTicker[player.player_id] = playerFixtures;
+    }
 
     // Chip planning - analyses all remaining GWs to find optimal chip timing
     const chipPlan = planChips(
@@ -159,6 +193,7 @@ export async function GET(
           form: Math.round((p.form || 0) * 10) / 10,
           xgi90: Math.round((p.xgi_per90 || 0) * 100) / 100,
           penalty: p.is_penalty_taker,
+          selected_by_percent: p.selected_by_percent || 0,
         }));
       topPlayers[posName] = posPlayers;
     }
@@ -199,6 +234,8 @@ export async function GET(
       chip_recommendations: chipRecs,
       chip_this_week: chipThisWeek,
       gw_schedule: schedule,
+      fixture_ticker: fixtureTicker,
+      deadline_time: deadlineTime,
       updated_at: updatedAt,
     });
   } catch (err: unknown) {

@@ -171,7 +171,7 @@ export default function TransferSimulator({
       />
 
       {/* Transfer bar */}
-      <div className="flex items-center justify-between px-5 py-3 bg-[var(--surface2)] border-t border-[var(--border)] min-h-[52px]">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-5 py-3 bg-[var(--surface2)] border-t border-[var(--border)] min-h-[52px]">
         <div>
           {confirmedTransfers.length > 0 && (
             <span className="text-xs text-[var(--accent)] font-semibold mr-2">
@@ -190,7 +190,7 @@ export default function TransferSimulator({
             </span>
           )}
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {(selectedOut.size > 0 || confirmedTransfers.length > 0) && (
             <button onClick={resetAll} className="px-4 py-2 text-xs font-semibold text-[var(--text-muted)] border border-[var(--border)] rounded-md hover:text-[var(--text)] hover:border-[var(--text-muted)]">
               {simResult && confirmedTransfers.length > 0 ? "Cancel this" : confirmedTransfers.length > 0 ? "Start over" : "Reset"}
@@ -266,8 +266,8 @@ export default function TransferSimulator({
           })}
 
           {/* Summary + confirm */}
-          <div className="flex items-center justify-between px-5 py-4 bg-[var(--surface)] border-t border-[var(--border)]">
-            <div className="flex gap-6">
+          <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-4 bg-[var(--surface)] border-t border-[var(--border)]">
+            <div className="flex flex-wrap gap-4 sm:gap-6">
               <div>
                 <div className="text-[10px] uppercase text-[var(--text-muted)]">Transfers</div>
                 <div className="text-base font-bold">{selectedOut.size}</div>
@@ -318,8 +318,8 @@ export default function TransferSimulator({
             </div>
           ))}
 
-          <div className="flex justify-between items-center px-5 py-4 bg-[var(--surface2)] border-t border-[var(--border)]">
-            <div className="flex gap-6">
+          <div className="flex flex-wrap justify-between items-center gap-4 px-5 py-4 bg-[var(--surface2)] border-t border-[var(--border)]">
+            <div className="flex flex-wrap gap-4 sm:gap-6">
               <div>
                 <div className="text-[10px] uppercase text-[var(--text-muted)]">Transfers</div>
                 <div className="text-base font-bold">{totalTransfersMade}</div>

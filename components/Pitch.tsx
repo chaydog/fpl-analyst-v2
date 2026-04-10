@@ -42,8 +42,8 @@ export default function Pitch({
   return (
     <div>
       {/* Pitch */}
-      <div className="p-5">
-        <div className="relative rounded-lg p-7 pb-5 min-h-[420px] overflow-hidden"
+      <div className="p-4 sm:p-5">
+        <div className="relative rounded-lg p-4 sm:p-7 pb-5 min-h-[420px] overflow-hidden"
           style={{
             background: `repeating-linear-gradient(to bottom, #1a5e2a 0px, #1a5e2a 60px, #1f6e32 60px, #1f6e32 120px)`,
           }}
@@ -71,7 +71,7 @@ export default function Pitch({
       </div>
 
       {/* Bench */}
-      <div className="flex justify-center gap-4 py-4 px-5 bg-[var(--surface2)] border-t border-[var(--border)]">
+      <div className="flex flex-wrap justify-center gap-4 py-4 px-5 bg-[var(--surface2)] border-t border-[var(--border)]">
         <span className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] flex items-center mr-2">
           Bench
         </span>
@@ -102,14 +102,14 @@ function PlayerCard({
 
   return (
     <div
-      className={`flex flex-col items-center ${small ? "w-[70px]" : "w-[90px]"} ${
+      className={`flex flex-col items-center ${small ? "w-[70px]" : "w-[70px] sm:w-[90px]"} ${
         clickable ? "cursor-pointer group" : ""
       } ${selected ? "opacity-50" : ""}`}
       onClick={clickable ? onClick : undefined}
     >
       <div
         className={`relative flex items-center justify-center mb-0.5 ${
-          small ? "w-[44px] h-[50px]" : "w-[58px] h-[66px]"
+          small ? "w-[44px] h-[50px]" : "w-[42px] h-[48px] sm:w-[58px] sm:h-[66px]"
         } ${clickable ? "group-hover:drop-shadow-[0_0_12px_rgba(255,70,85,0.4)]" : ""} ${
           selected ? "brightness-50" : ""
         }`}
@@ -122,7 +122,7 @@ function PlayerCard({
         )}
       </div>
       <div className={`font-semibold text-center text-white bg-black/70 px-2 py-0.5 rounded max-w-full overflow-hidden text-ellipsis whitespace-nowrap ${
-        small ? "text-[10px]" : "text-[11px]"
+        small ? "text-[10px]" : "text-[9px] sm:text-[11px]"
       } ${selected ? "!bg-[var(--red)]" : ""}`}>
         {p.web_name}
       </div>
