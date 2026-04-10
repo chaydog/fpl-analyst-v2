@@ -1,0 +1,9 @@
+node_modules/
+.next/
+out/
+.env.local
+.env
+pipeline/.venv/
+pipeline/__pycache__/
+pipeline/fpl/__pycache__/
+*.pyc
