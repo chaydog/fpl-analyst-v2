@@ -3,7 +3,7 @@ import { getSupabase } from "@/lib/supabase";
 import { getEntry, getEntryHistory, getPicks, getKitUrl } from "@/lib/fpl-api";
 import { selectStarting11 } from "@/lib/optimizer";
 import { recommendTransfers } from "@/lib/transfers";
-import { getChipsAvailable, calculateFreeTransfers, detectDgwBgw, getChipRecommendation } from "@/lib/chips";
+import { getChipsAvailable, calculateFreeTransfers, detectDgwBgw, planChips } from "@/lib/chips";
 import { POS_MAP } from "@/lib/types";
 import type { Player, SquadPlayer, Horizon, ReplacementOption } from "@/lib/types";
 
@@ -109,37 +109,37 @@ export async function GET(
     const chips = history.chips || [];
     const chipsAvailable = getChipsAvailable(chips, nextGw);
 
-    // Fixtures for DGW/BGW detection
+    // Fixtures for DGW/BGW detection + chip planning
     const { data: fixtures } = await getSupabase().from("fixtures").select("*").eq("finished", false);
-    const schedule = detectDgwBgw(
-      (fixtures || []).map((f) => ({
-        gameweek: f.gameweek,
-        team_h: f.team_h,
-        team_a: f.team_a,
-        finished: f.finished,
-      })),
-      nextGw
+    const fixtureList = (fixtures || []).map((f) => ({
+      gameweek: f.gameweek,
+      team_h: f.team_h,
+      team_a: f.team_a,
+      finished: f.finished,
+    }));
+    const schedule = detectDgwBgw(fixtureList, nextGw);
+
+    // Chip planning - analyses all remaining GWs to find optimal chip timing
+    const chipPlan = planChips(
+      chipsAvailable,
+      squad,
+      allPlayers as SquadPlayer[],
+      fixtureList,
+      nextGw,
+      5 // use 5GW horizon for chip planning
     );
 
-    const chipRecs: Record<string, { best_gw: number | null; score: number; reasoning: string[] }> = {};
-    // Simple per-chip recs
-    for (const [key, chip] of Object.entries(chipsAvailable)) {
-      if (chip.available) {
-        const bestDgw = schedule.find((s) => s.type.includes("double"));
-        const bestBgw = schedule.find((s) => s.type.includes("blank"));
-        if (key === "bboost" && bestDgw) {
-          chipRecs[key] = { best_gw: bestDgw.gw, score: 8, reasoning: [`Best in DGW${bestDgw.gw} - ${bestDgw.double_teams} teams doubled`] };
-        } else if (key === "3xc" && bestDgw) {
-          chipRecs[key] = { best_gw: bestDgw.gw, score: 7, reasoning: [`Captain plays twice in DGW${bestDgw.gw}`] };
-        } else if (key === "freehit" && bestBgw) {
-          chipRecs[key] = { best_gw: bestBgw.gw, score: 9, reasoning: [`${bestBgw.blank_teams} teams blanking in GW${bestBgw.gw}`] };
-        } else if (key === "wildcard") {
-          chipRecs[key] = { best_gw: null, score: 3, reasoning: ["Save for fixture swings or squad overhaul"] };
-        }
-      }
+    const chipRecs: Record<string, { best_gw: number | null; score: number; reasoning: string[]; action?: string }> = {};
+    for (const [key, plan] of Object.entries(chipPlan.plans)) {
+      chipRecs[key] = {
+        best_gw: plan.best_gw,
+        score: plan.score,
+        reasoning: plan.reasoning,
+        action: plan.action,
+      };
     }
 
-    const chipThisWeek = getChipRecommendation(chipsAvailable, squad, schedule, nextGw);
+    const chipThisWeek = chipPlan.this_week;
 
     // Top players by position
     const topPlayers: Record<string, ReplacementOption[]> = {};

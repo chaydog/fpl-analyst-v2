@@ -92,10 +92,17 @@ export default function ChipAdvisor({
         <div className="px-5 py-4 border-t border-[var(--border)] space-y-2">
           {Object.entries(chipRecommendations).map(([key, rec]) => (
             <div key={key} className="bg-[var(--surface2)] rounded-lg p-3">
-              <h4 className="text-[13px] font-semibold mb-1">
-                {CHIP_LABELS[key] || key}
-                {rec.best_gw ? ` - Best: GW${rec.best_gw}` : ""}
-              </h4>
+              <div className="flex justify-between items-start">
+                <h4 className="text-[13px] font-semibold mb-1">
+                  {CHIP_LABELS[key] || key}
+                  {rec.best_gw ? ` - Best: GW${rec.best_gw}` : ""}
+                </h4>
+                {rec.action && (
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-[rgba(0,255,135,0.1)] text-[var(--accent)] whitespace-nowrap ml-2">
+                    {rec.action}
+                  </span>
+                )}
+              </div>
               <div className="text-xs text-[var(--text-muted)]">
                 {((rec.reasoning as string[]) || []).join(" | ")}
               </div>
