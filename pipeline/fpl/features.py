@@ -48,6 +48,9 @@ class FeatureBuilder:
         # Per-player home/away splits
         df = self._add_home_away_splits(df, shift=True)
 
+        # Venue-specific matchup features
+        df = self._add_matchup_features(df)
+
         # Opponent defensive weakness
         df = self._add_opponent_defensive_features(df)
 
@@ -109,6 +112,9 @@ class FeatureBuilder:
 
         # Per-player home/away splits
         latest = self._add_home_away_splits(latest, shift=False)
+
+        # Venue-specific matchup
+        latest = self._add_prediction_matchup_features(latest)
 
         # Injury return detection
         latest = self._add_injury_return_features(latest)
@@ -184,6 +190,9 @@ class FeatureBuilder:
             "opponent_defence_strength", "relative_strength",
             "has_fixture", "opponent_team_next", "next_gw",
             "opp_goals_conceded_4", "opp_xgc_4",
+            "team_goals_scored_venue_4", "team_goals_conceded_venue_4",
+            "opp_goals_scored_venue_4", "opp_goals_conceded_venue_4",
+            "attacking_matchup", "defensive_matchup",
         ]
         base_clean = base.drop(
             columns=[c for c in fixture_cols_to_drop if c in base.columns],
@@ -195,6 +204,7 @@ class FeatureBuilder:
             gw_features = base_clean.copy()
             gw_features["next_gw"] = gw
             gw_features = self._add_prediction_fixture_features(gw_features, gw)
+            gw_features = self._add_prediction_matchup_features(gw_features)
             gw_features = self._add_prediction_opponent_defensive(gw_features)
             result[gw] = gw_features
 
@@ -240,6 +250,13 @@ class FeatureBuilder:
             # Per-player home/away splits
             "home_pts_avg", "away_pts_avg", "home_away_diff",
             "home_xgi_avg", "away_xgi_avg",
+            # Matchup features: venue-specific team attack vs opponent defence
+            "team_goals_scored_venue_4",  # how many goals player's team scores at this venue
+            "team_goals_conceded_venue_4",  # how many goals they concede at this venue
+            "opp_goals_scored_venue_4",  # how many goals opponent scores at their venue
+            "opp_goals_conceded_venue_4",  # how many goals opponent concedes at their venue
+            "attacking_matchup",  # team attack @ venue vs opp defence @ venue
+            "defensive_matchup",  # team defence @ venue vs opp attack @ venue
         ]
 
     def _add_rolling_features(self, df: pd.DataFrame, shift: bool = True) -> pd.DataFrame:
@@ -545,6 +562,113 @@ class FeatureBuilder:
         df["opp_xgc_4"] = df[opp_col].map(
             lambda t: latest.get(int(t), (0, {}))[1].get("xgc_4", 1.0) if pd.notna(t) and int(t) > 0 else 1.0
         )
+
+        return df
+
+    def _build_team_venue_stats(self) -> dict:
+        """Build rolling 4-GW stats per team split by home/away.
+
+        Returns: {(team_id, 'home'|'away'): {'scored': X, 'conceded': X}}
+        using latest available data.
+        """
+        if not hasattr(self, 'history') or self.history.empty:
+            return {}
+
+        h = self.history.copy()
+        # One row per team per GW
+        team_gw = h.groupby(["team", "round"]).agg({
+            "goals_scored": "sum",
+            "goals_conceded": "first",
+            "was_home": "first",
+        }).reset_index()
+        team_gw = team_gw.sort_values(["team", "round"])
+
+        result = {}
+        for team_id in team_gw["team"].unique():
+            t = team_gw[team_gw["team"] == team_id]
+            for venue, is_home in [("home", True), ("away", False)]:
+                venue_data = t[t["was_home"] == is_home].tail(4)
+                if len(venue_data) >= 2:
+                    result[(int(team_id), venue)] = {
+                        "scored": round(float(venue_data["goals_scored"].mean()), 2),
+                        "conceded": round(float(venue_data["goals_conceded"].mean()), 2),
+                    }
+                else:
+                    result[(int(team_id), venue)] = {"scored": 1.0, "conceded": 1.0}
+
+        return result
+
+    def _add_matchup_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Add venue-specific matchup features for training data."""
+        venue_stats = self._build_team_venue_stats()
+
+        def get_matchup(row):
+            team = int(row.get("team", 0))
+            opp = int(row.get("opponent_team", 0))
+            is_home = bool(row.get("was_home", False))
+
+            team_venue = "home" if is_home else "away"
+            opp_venue = "away" if is_home else "home"
+
+            ts = venue_stats.get((team, team_venue), {"scored": 1.0, "conceded": 1.0})
+            os = venue_stats.get((opp, opp_venue), {"scored": 1.0, "conceded": 1.0})
+
+            return pd.Series({
+                "team_goals_scored_venue_4": ts["scored"],
+                "team_goals_conceded_venue_4": ts["conceded"],
+                "opp_goals_scored_venue_4": os["scored"],
+                "opp_goals_conceded_venue_4": os["conceded"],
+                "attacking_matchup": ts["scored"] + os["conceded"],  # high = good for attackers
+                "defensive_matchup": ts["conceded"] + os["scored"],  # low = good for defenders
+            })
+
+        if "opponent_team" in df.columns:
+            matchup = df.apply(get_matchup, axis=1)
+            for col in matchup.columns:
+                df[col] = matchup[col].values
+        else:
+            for col in ["team_goals_scored_venue_4", "team_goals_conceded_venue_4",
+                        "opp_goals_scored_venue_4", "opp_goals_conceded_venue_4",
+                        "attacking_matchup", "defensive_matchup"]:
+                df[col] = 1.0 if "scored" in col or "matchup" in col else 1.0
+
+        return df
+
+    def _add_prediction_matchup_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Add venue-specific matchup features for predictions."""
+        venue_stats = self._build_team_venue_stats()
+
+        opp_col = "opponent_team_next" if "opponent_team_next" in df.columns else "opponent_team"
+        if opp_col not in df.columns:
+            for col in ["team_goals_scored_venue_4", "team_goals_conceded_venue_4",
+                        "opp_goals_scored_venue_4", "opp_goals_conceded_venue_4",
+                        "attacking_matchup", "defensive_matchup"]:
+                df[col] = 1.0
+            return df
+
+        def get_matchup(row):
+            team = int(row.get("team", 0))
+            opp = int(row.get(opp_col, 0))
+            is_home = bool(row.get("is_home", False))
+
+            team_venue = "home" if is_home else "away"
+            opp_venue = "away" if is_home else "home"
+
+            ts = venue_stats.get((team, team_venue), {"scored": 1.0, "conceded": 1.0})
+            os = venue_stats.get((opp, opp_venue), {"scored": 1.0, "conceded": 1.0})
+
+            return pd.Series({
+                "team_goals_scored_venue_4": ts["scored"],
+                "team_goals_conceded_venue_4": ts["conceded"],
+                "opp_goals_scored_venue_4": os["scored"],
+                "opp_goals_conceded_venue_4": os["conceded"],
+                "attacking_matchup": ts["scored"] + os["conceded"],
+                "defensive_matchup": ts["conceded"] + os["scored"],
+            })
+
+        matchup = df.apply(get_matchup, axis=1)
+        for col in matchup.columns:
+            df[col] = matchup[col].values
 
         return df
 
