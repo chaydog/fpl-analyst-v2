@@ -1,20 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-
-const FEATURES = [
-  { icon: "\u26BD", title: "Predicted Points", desc: "XGBoost + RF ensemble predicts next-GW expected points per player" },
-  { icon: "\uD83C\uDFAF", title: "Optimal Lineup", desc: "Integer programming selects your best starting XI and captain" },
-  { icon: "\uD83D\uDD04", title: "Transfer Simulator", desc: "Click to sell, pick replacements, confirm - see the new lineup instantly" },
-  { icon: "\uD83D\uDCA1", title: "Chip Planner", desc: "Scans all remaining GWs to find optimal BB, TC, FH, WC timing" },
-];
 
 export default function Landing() {
   const [teamId, setTeamId] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const router = useRouter();
+
+  useEffect(() => setMounted(true), []);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -29,109 +25,156 @@ export default function Landing() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 relative overflow-hidden">
-      {/* Background effects */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-[-40%] left-[-20%] w-[80vw] h-[80vw] rounded-full opacity-[0.03]"
-          style={{ background: 'radial-gradient(circle, var(--accent) 0%, transparent 70%)' }} />
-        <div className="absolute bottom-[-30%] right-[-15%] w-[60vw] h-[60vw] rounded-full opacity-[0.02]"
-          style={{ background: 'radial-gradient(circle, var(--accent2) 0%, transparent 70%)' }} />
-        {/* Grid lines */}
-        <div className="absolute inset-0 opacity-[0.03]"
-          style={{ backgroundImage: 'linear-gradient(var(--text-muted) 1px, transparent 1px), linear-gradient(90deg, var(--text-muted) 1px, transparent 1px)', backgroundSize: '60px 60px' }} />
+    <div className="min-h-screen flex flex-col items-center justify-center px-4 relative overflow-hidden">
+      {/* Background layers */}
+      <div className="absolute inset-0 pointer-events-none">
+        {/* Radial gradient orbs */}
+        <div className="absolute top-[-30%] left-[-10%] w-[70vw] h-[70vw] rounded-full opacity-[0.04]"
+          style={{ background: 'radial-gradient(circle, var(--accent) 0%, transparent 65%)' }} />
+        <div className="absolute bottom-[-20%] right-[-10%] w-[50vw] h-[50vw] rounded-full opacity-[0.03]"
+          style={{ background: 'radial-gradient(circle, var(--accent2) 0%, transparent 65%)' }} />
+        <div className="absolute top-[20%] right-[10%] w-[30vw] h-[30vw] rounded-full opacity-[0.02]"
+          style={{ background: 'radial-gradient(circle, var(--gold) 0%, transparent 60%)' }} />
+        {/* Dot grid */}
+        <div className="absolute inset-0 opacity-[0.035]"
+          style={{
+            backgroundImage: 'radial-gradient(circle, var(--text-muted) 1px, transparent 1px)',
+            backgroundSize: '32px 32px',
+          }} />
       </div>
 
-      <div className="text-center max-w-lg w-full relative z-10">
-        {/* Logo */}
-        <div className="animate-in animate-in-1">
-          <div className="inline-block mb-6">
-            <div className="text-[11px] font-mono tracking-[0.3em] text-[var(--text-muted)] uppercase mb-3"
-              style={{ fontFamily: 'var(--font-mono)' }}>
-              AI-Powered Analysis
-            </div>
-            <h1 className="text-6xl sm:text-7xl font-bold tracking-tight leading-none"
-              style={{
-                fontFamily: 'var(--font-display)',
-                background: 'linear-gradient(135deg, var(--accent) 0%, var(--accent2) 50%, var(--accent) 100%)',
-                backgroundSize: '200% auto',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-                filter: 'drop-shadow(0 0 30px rgba(0,255,135,0.2))',
-              }}>
-              FPL ANALYST
-            </h1>
+      <div className={`max-w-xl w-full relative z-10 transition-all duration-700 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}>
+
+        {/* Title block */}
+        <div className="text-center mb-12">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-[var(--border)] bg-[var(--surface-glass)] backdrop-blur-sm mb-6"
+            style={{ fontFamily: 'var(--font-mono)' }}>
+            <div className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] animate-pulse" />
+            <span className="text-[10px] text-[var(--text-muted)] tracking-wider uppercase">
+              ML-powered predictions
+            </span>
           </div>
+
+          <h1 className="text-[80px] sm:text-[110px] lg:text-[130px] leading-[0.85] tracking-tight mb-4"
+            style={{
+              fontFamily: 'var(--font-display)',
+              color: 'var(--text)',
+            }}>
+            FPL
+            <br />
+            <span style={{
+              background: 'linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              filter: 'drop-shadow(0 0 40px rgba(52,211,153,0.15))',
+            }}>
+              ANALYST
+            </span>
+          </h1>
+
+          <p className="text-[var(--text-muted)] text-base sm:text-lg max-w-sm mx-auto leading-relaxed"
+            style={{ fontFamily: 'var(--font-body)' }}>
+            Predicted lineups, transfer advice, and chip strategy for your FPL team
+          </p>
         </div>
 
-        {/* Feature cards */}
-        <div className="grid grid-cols-2 gap-3 mb-10 animate-in animate-in-2">
-          {FEATURES.map((f, i) => (
-            <div
-              key={f.title}
-              className="group relative bg-[var(--surface)] backdrop-blur-md border border-[var(--border)] rounded-xl p-4 text-left transition-all duration-300 hover:border-[rgba(0,255,135,0.2)] hover:bg-[rgba(16,21,32,0.9)]"
-            >
-              <div className="text-2xl mb-2 grayscale group-hover:grayscale-0 transition-all duration-300">{f.icon}</div>
-              <div className="text-[13px] font-semibold mb-1" style={{ fontFamily: 'var(--font-display)' }}>{f.title}</div>
-              <div className="text-[11px] text-[var(--text-muted)] leading-relaxed">{f.desc}</div>
+        {/* Feature pills */}
+        <div className="flex flex-wrap justify-center gap-2 mb-10">
+          {[
+            { label: "xPts Predictions", color: "var(--accent)" },
+            { label: "Transfer Simulator", color: "var(--accent2)" },
+            { label: "Chip Planner", color: "var(--gold)" },
+            { label: "5GW Lookahead", color: "var(--purple)" },
+          ].map((f) => (
+            <div key={f.label}
+              className="px-3.5 py-1.5 rounded-full text-[11px] font-medium border"
+              style={{
+                fontFamily: 'var(--font-body)',
+                color: f.color,
+                borderColor: `color-mix(in srgb, ${f.color} 20%, transparent)`,
+                background: `color-mix(in srgb, ${f.color} 5%, transparent)`,
+              }}>
+              {f.label}
             </div>
           ))}
         </div>
 
         {/* Input */}
-        <form onSubmit={handleSubmit} className="mb-5 animate-in animate-in-3">
-          <div className="flex gap-3">
+        <form onSubmit={handleSubmit} className="mb-5">
+          <div className="relative">
             <input
               type="text"
               value={teamId}
               onChange={(e) => setTeamId(e.target.value)}
-              placeholder="Enter your FPL Team ID"
+              placeholder="Enter your Team ID"
               inputMode="numeric"
-              className="flex-1 px-5 py-4 text-base bg-[var(--surface)] backdrop-blur-md border border-[var(--border)] rounded-xl text-[var(--text)] outline-none transition-all duration-300 focus:border-[var(--accent)] focus:shadow-[0_0_20px_rgba(0,255,135,0.1)] placeholder:text-[var(--text-muted)]"
-              style={{ fontFamily: 'var(--font-mono)' }}
+              className="w-full px-6 py-5 text-lg bg-[var(--surface)] border border-[var(--border)] rounded-2xl text-[var(--text)] outline-none transition-all duration-300 focus:border-[var(--accent)] focus:shadow-[0_0_0_4px_rgba(52,211,153,0.08)] placeholder:text-[var(--text-dim)] pr-32"
+              style={{ fontFamily: 'var(--font-mono)', fontSize: '16px', letterSpacing: '0.05em' }}
             />
             <button
               type="submit"
               disabled={loading}
-              className="btn-primary px-8 py-4 text-base rounded-xl disabled:opacity-50 whitespace-nowrap"
+              className="absolute right-2 top-1/2 -translate-y-1/2 btn-primary px-6 py-3 rounded-xl disabled:opacity-50"
             >
               {loading ? (
                 <span className="flex items-center gap-2">
-                  <span className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
-                  Loading
+                  <span className="w-4 h-4 border-2 border-black/20 border-t-black/80 rounded-full animate-spin" />
                 </span>
-              ) : "Analyse"}
+              ) : "GO"}
             </button>
           </div>
         </form>
 
-        {error && <p className="text-[var(--red)] text-sm mb-4 font-mono">{error}</p>}
+        {error && (
+          <p className="text-center text-[var(--red)] text-sm mb-4" style={{ fontFamily: 'var(--font-mono)' }}>
+            {error}
+          </p>
+        )}
 
-        {/* Help */}
-        <div className="animate-in animate-in-4 bg-[var(--surface)] backdrop-blur-md border border-[var(--border)] rounded-xl p-5 text-left">
-          <h3 className="text-[10px] uppercase tracking-[0.15em] text-[var(--text-muted)] font-semibold mb-3"
-            style={{ fontFamily: 'var(--font-display)' }}>
-            How to find your Team ID
-          </h3>
-          <ol className="list-decimal pl-5 text-sm text-[var(--text-muted)] space-y-1.5">
-            <li>
-              Go to{" "}
-              <a href="https://fantasy.premierleague.com" target="_blank" className="text-[var(--accent)] hover:underline underline-offset-2">
-                fantasy.premierleague.com
-              </a>
-            </li>
-            <li>Log in and click <strong className="text-[var(--text)] font-medium">My Team</strong></li>
-            <li>
-              Look at the URL:
-              <code className="text-[var(--accent)] text-xs block mt-1.5 font-mono bg-[var(--accent-dim)] px-3 py-1.5 rounded-md">
-                fantasy.premierleague.com/entry/<strong className="text-white">1234567</strong>/event/32
-              </code>
-            </li>
-            <li>The number after <strong className="text-[var(--text)] font-medium">/entry/</strong> is your Team ID</li>
-          </ol>
-        </div>
+        {/* How to find ID - collapsible feel */}
+        <details className="group">
+          <summary className="text-center text-[var(--text-dim)] text-xs cursor-pointer hover:text-[var(--text-muted)] transition-colors list-none"
+            style={{ fontFamily: 'var(--font-mono)' }}>
+            Where do I find my Team ID?
+          </summary>
+          <div className="mt-4 bg-[var(--surface)] border border-[var(--border)] rounded-xl p-5 text-left animate-in">
+            <ol className="space-y-2 text-sm text-[var(--text-muted)]" style={{ fontFamily: 'var(--font-body)' }}>
+              <li className="flex gap-3">
+                <span className="text-[var(--text-dim)] font-mono text-xs mt-0.5 shrink-0">01</span>
+                <span>
+                  Go to{" "}
+                  <a href="https://fantasy.premierleague.com" target="_blank"
+                    className="text-[var(--accent)] hover:underline underline-offset-2">
+                    fantasy.premierleague.com
+                  </a>
+                </span>
+              </li>
+              <li className="flex gap-3">
+                <span className="text-[var(--text-dim)] font-mono text-xs mt-0.5 shrink-0">02</span>
+                <span>Log in and click <strong className="text-[var(--text)] font-medium">My Team</strong></span>
+              </li>
+              <li className="flex gap-3">
+                <span className="text-[var(--text-dim)] font-mono text-xs mt-0.5 shrink-0">03</span>
+                <span>
+                  Copy the number from the URL:
+                  <code className="block mt-1.5 text-xs px-3 py-2 rounded-lg bg-[var(--bg2)] border border-[var(--border)]"
+                    style={{ fontFamily: 'var(--font-mono)' }}>
+                    <span className="text-[var(--text-dim)]">fantasy.premierleague.com/entry/</span>
+                    <span className="text-[var(--accent)] font-semibold">1234567</span>
+                    <span className="text-[var(--text-dim)]">/event/32</span>
+                  </code>
+                </span>
+              </li>
+            </ol>
+          </div>
+        </details>
+      </div>
 
-        <p className="text-[10px] text-[var(--text-muted)] mt-8 opacity-50 font-mono tracking-wider">
-          PREDICTIONS UPDATED DAILY - XGBOOST + RANDOM FOREST ENSEMBLE
+      {/* Footer */}
+      <div className="absolute bottom-0 left-0 right-0 py-4 text-center">
+        <p className="text-[9px] text-[var(--text-dim)] tracking-[0.2em] uppercase"
+          style={{ fontFamily: 'var(--font-mono)' }}>
+          XGBoost + Random Forest Ensemble / Updated Daily
         </p>
       </div>
     </div>
