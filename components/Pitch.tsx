@@ -151,8 +151,12 @@ function PlayerCard({
         {p.web_name}
       </div>
       {/* xPts */}
-      <div className={`text-[9px] sm:text-[10px] font-bold mt-[2px] ${small ? "text-[var(--text-muted)]" : "text-white/90"}`}
-        style={{ fontFamily: 'var(--font-mono)', textShadow: small ? 'none' : '0 1px 3px rgba(0,0,0,0.4)' }}>
+      <div className={`text-[9px] sm:text-[10px] font-bold mt-[2px] px-1.5 py-[1px] rounded ${
+        small
+          ? "text-[var(--text-muted)]"
+          : "text-white bg-black/50 backdrop-blur-sm"
+      }`}
+        style={{ fontFamily: 'var(--font-mono)' }}>
         {xpts} {!small && label}
       </div>
     </div>
