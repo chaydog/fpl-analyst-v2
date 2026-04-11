@@ -4,7 +4,16 @@ on:
   schedule:
     - cron: '0 6 * * *'      # Daily at 6am UTC
     - cron: '0 16 * * 5'     # Friday 4pm UTC (pre-deadline)
-  workflow_dispatch: {}        # Manual trigger
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Force run even during active gameweek'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
 
 jobs:
   update:
@@ -26,4 +35,5 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          FORCE_RUN: ${{ github.event.inputs.force || 'false' }}
         run: python run.py
