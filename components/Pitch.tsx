@@ -28,7 +28,7 @@ function getXpts(p: PitchPlayer, h: Horizon) {
 }
 
 export default function Pitch({
-  starters, bench, horizon, title = "Recommended Starting XI",
+  starters, bench, horizon,
   onPlayerClick, selectedIds, clickable = false,
 }: PitchProps) {
   const rows: Record<string, PitchPlayer[]> = { GKP: [], DEF: [], MID: [], FWD: [] };
@@ -37,42 +37,50 @@ export default function Pitch({
     rows[pos]?.push(p);
   }
 
-  const label = horizon === 1 ? "xPts" : "xPts (5GW)";
+  const label = horizon === 1 ? "xPts" : "5GW";
 
   return (
     <div>
       {/* Pitch */}
-      <div className="p-4 sm:p-5">
-        <div className="relative rounded-lg p-4 sm:p-7 pb-5 min-h-[420px] overflow-hidden"
+      <div className="p-3 sm:p-4">
+        <div className="relative rounded-xl overflow-hidden min-h-[440px] sm:min-h-[480px]"
           style={{
-            background: `repeating-linear-gradient(to bottom, #1a5e2a 0px, #1a5e2a 60px, #1f6e32 60px, #1f6e32 120px)`,
+            background: `repeating-linear-gradient(to bottom, #2d8a4e 0px, #2d8a4e 60px, #339956 60px, #339956 120px)`,
+            boxShadow: 'inset 0 0 60px rgba(0,0,0,0.12)',
           }}
         >
-          {/* Center circle */}
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120px] h-[120px] border-2 border-white/25 rounded-full" />
-          <div className="absolute top-1/2 left-[5%] right-[5%] h-[2px] bg-white/25" />
+          {/* Pitch markings */}
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[100px] h-[100px] sm:w-[130px] sm:h-[130px] border-2 border-white/20 rounded-full" />
+          <div className="absolute top-1/2 left-[4%] right-[4%] h-[2px] bg-white/15" />
+          {/* Penalty areas */}
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[50%] h-[18%] border-b-2 border-l-2 border-r-2 border-white/12 rounded-b-sm" />
+          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[50%] h-[18%] border-t-2 border-l-2 border-r-2 border-white/12 rounded-t-sm" />
 
-          {(["GKP", "DEF", "MID", "FWD"] as const).map((pos) => (
-            <div key={pos} className="flex justify-center gap-3 relative z-10 mb-4 last:mb-0">
-              {rows[pos].map((p) => (
-                <PlayerCard
-                  key={p.player_id}
-                  player={p}
-                  horizon={horizon}
-                  label={label}
-                  clickable={clickable}
-                  selected={selectedIds?.has(p.player_id) ?? false}
-                  onClick={() => onPlayerClick?.(p.player_id)}
-                />
-              ))}
-            </div>
-          ))}
+          {/* Player rows - spread across full width */}
+          <div className="relative z-10 flex flex-col justify-between h-full py-5 sm:py-7 px-2 sm:px-4" style={{ minHeight: '440px' }}>
+            {(["GKP", "DEF", "MID", "FWD"] as const).map((pos) => (
+              <div key={pos} className="flex justify-around items-center w-full px-2 sm:px-6">
+                {rows[pos].map((p) => (
+                  <PlayerCard
+                    key={p.player_id}
+                    player={p}
+                    horizon={horizon}
+                    label={label}
+                    clickable={clickable}
+                    selected={selectedIds?.has(p.player_id) ?? false}
+                    onClick={() => onPlayerClick?.(p.player_id)}
+                  />
+                ))}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
       {/* Bench */}
-      <div className="flex flex-wrap justify-center gap-4 py-4 px-5 bg-[var(--surface2)] border-t border-[var(--border)]">
-        <span className="text-[11px] uppercase tracking-wider text-[var(--text-muted)] flex items-center mr-2">
+      <div className="flex flex-wrap justify-center gap-3 sm:gap-5 py-3 px-4 bg-[var(--surface2)] border-t border-[var(--border)]">
+        <span className="text-[10px] uppercase tracking-wider text-[var(--text-dim)] flex items-center mr-1 font-medium"
+          style={{ fontFamily: 'var(--font-mono)' }}>
           Bench
         </span>
         {bench.map((p) => (
@@ -102,31 +110,49 @@ function PlayerCard({
 
   return (
     <div
-      className={`flex flex-col items-center ${small ? "w-[70px]" : "w-[70px] sm:w-[90px]"} ${
+      className={`flex flex-col items-center ${small ? "w-[60px] sm:w-[70px]" : "w-[60px] sm:w-[80px]"} ${
         clickable ? "cursor-pointer group" : ""
-      } ${selected ? "opacity-50" : ""}`}
+      } ${selected ? "" : ""} transition-all duration-200`}
       onClick={clickable ? onClick : undefined}
     >
+      {/* Kit image - squarer proportions */}
       <div
-        className={`relative flex items-center justify-center mb-0.5 ${
-          small ? "w-[44px] h-[50px]" : "w-[42px] h-[48px] sm:w-[58px] sm:h-[66px]"
-        } ${clickable ? "group-hover:drop-shadow-[0_0_12px_rgba(255,70,85,0.4)]" : ""} ${
-          selected ? "brightness-50" : ""
+        className={`relative flex items-center justify-center transition-all duration-200 ${
+          small ? "w-[36px] h-[36px] sm:w-[40px] sm:h-[40px]" : "w-[42px] h-[42px] sm:w-[52px] sm:h-[52px]"
+        } ${clickable ? "group-hover:scale-115 group-hover:-translate-y-1" : ""} ${
+          selected ? "grayscale scale-90 opacity-40" : ""
         }`}
+        style={clickable ? {
+          filter: selected ? 'grayscale(1) brightness(0.5)' : undefined,
+          transition: 'all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)',
+        } : undefined}
       >
-        <img src={p.kit_url} alt={p.web_name} className="w-full h-full object-contain drop-shadow-[0_2px_4px_rgba(0,0,0,0.4)]" />
+        <img
+          src={p.kit_url}
+          alt={p.web_name}
+          className="w-full h-full object-contain drop-shadow-[0_2px_6px_rgba(0,0,0,0.3)]"
+          style={{ objectPosition: 'center top' }}
+        />
         {p.role && (
-          <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-[var(--yellow)] text-black text-[10px] font-extrabold flex items-center justify-center">
+          <div className={`absolute -top-1.5 -right-1.5 w-[18px] h-[18px] rounded-full text-[9px] font-bold flex items-center justify-center shadow-sm ${
+            p.role === 'C'
+              ? 'bg-[var(--gold)] text-white'
+              : 'bg-white/90 text-[var(--text)]'
+          }`}>
             {p.role}
           </div>
         )}
       </div>
-      <div className={`font-semibold text-center text-white bg-black/70 px-2 py-0.5 rounded max-w-full overflow-hidden text-ellipsis whitespace-nowrap ${
-        small ? "text-[10px]" : "text-[9px] sm:text-[11px]"
-      } ${selected ? "!bg-[var(--red)]" : ""}`}>
+      {/* Name pill */}
+      <div className={`font-semibold text-center text-white px-2 py-[2px] rounded-md max-w-full overflow-hidden text-ellipsis whitespace-nowrap mt-0.5 ${
+        small ? "text-[9px]" : "text-[9px] sm:text-[10px]"
+      } ${selected ? "bg-[var(--red)]" : "bg-black/60 backdrop-blur-sm"}`}
+        style={{ fontFamily: 'var(--font-body)' }}>
         {p.web_name}
       </div>
-      <div className="text-[10px] text-[var(--accent)] font-bold mt-0.5">
+      {/* xPts */}
+      <div className="text-[9px] sm:text-[10px] font-bold mt-[2px] text-white/80"
+        style={{ fontFamily: 'var(--font-mono)', textShadow: '0 1px 3px rgba(0,0,0,0.4)' }}>
         {xpts} {!small && label}
       </div>
     </div>

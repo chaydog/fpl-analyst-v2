@@ -29,17 +29,15 @@ export default function Landing() {
       {/* Background layers */}
       <div className="absolute inset-0 pointer-events-none">
         {/* Radial gradient orbs */}
-        <div className="absolute top-[-30%] left-[-10%] w-[70vw] h-[70vw] rounded-full opacity-[0.04]"
+        <div className="absolute top-[-30%] left-[-10%] w-[70vw] h-[70vw] rounded-full opacity-[0.06]"
           style={{ background: 'radial-gradient(circle, var(--accent) 0%, transparent 65%)' }} />
-        <div className="absolute bottom-[-20%] right-[-10%] w-[50vw] h-[50vw] rounded-full opacity-[0.03]"
+        <div className="absolute bottom-[-20%] right-[-10%] w-[50vw] h-[50vw] rounded-full opacity-[0.04]"
           style={{ background: 'radial-gradient(circle, var(--accent2) 0%, transparent 65%)' }} />
-        <div className="absolute top-[20%] right-[10%] w-[30vw] h-[30vw] rounded-full opacity-[0.02]"
-          style={{ background: 'radial-gradient(circle, var(--gold) 0%, transparent 60%)' }} />
         {/* Dot grid */}
-        <div className="absolute inset-0 opacity-[0.035]"
+        <div className="absolute inset-0 opacity-[0.04]"
           style={{
-            backgroundImage: 'radial-gradient(circle, var(--text-muted) 1px, transparent 1px)',
-            backgroundSize: '32px 32px',
+            backgroundImage: 'radial-gradient(circle, var(--text-dim) 0.8px, transparent 0.8px)',
+            backgroundSize: '28px 28px',
           }} />
       </div>
 
@@ -66,7 +64,6 @@ export default function Landing() {
               background: 'linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%)',
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
-              filter: 'drop-shadow(0 0 40px rgba(52,211,153,0.15))',
             }}>
               ANALYST
             </span>

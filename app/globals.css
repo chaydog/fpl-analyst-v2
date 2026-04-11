@@ -3,31 +3,31 @@
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 
 :root {
-  /* Palette - warm darks, emerald accent, gold secondary */
-  --bg: #080b11;
-  --bg2: #0c1019;
-  --surface: #111827;
-  --surface2: #1a2234;
-  --surface-glass: rgba(17, 24, 39, 0.75);
-  --border: rgba(51, 65, 85, 0.4);
-  --border-hover: rgba(51, 65, 85, 0.7);
-  --text: #f1f5f9;
-  --text-muted: #64748b;
-  --text-dim: #475569;
+  /* Light palette */
+  --bg: #f8f9fb;
+  --bg2: #f0f2f5;
+  --surface: #ffffff;
+  --surface2: #f3f4f6;
+  --surface-glass: rgba(255, 255, 255, 0.85);
+  --border: rgba(0, 0, 0, 0.08);
+  --border-hover: rgba(0, 0, 0, 0.15);
+  --text: #111827;
+  --text-muted: #6b7280;
+  --text-dim: #9ca3af;
 
   /* Accents */
-  --accent: #34d399;
-  --accent-bright: #6ee7b7;
-  --accent-dim: rgba(52, 211, 153, 0.08);
-  --accent-border: rgba(52, 211, 153, 0.2);
-  --accent2: #22d3ee;
-  --gold: #fbbf24;
-  --gold-dim: rgba(251, 191, 36, 0.1);
-  --purple: #a78bfa;
-  --red: #f87171;
-  --red-dim: rgba(248, 113, 113, 0.1);
-  --yellow: #fbbf24;
-  --green: #34d399;
+  --accent: #059669;
+  --accent-bright: #10b981;
+  --accent-dim: rgba(5, 150, 105, 0.06);
+  --accent-border: rgba(5, 150, 105, 0.15);
+  --accent2: #0891b2;
+  --gold: #d97706;
+  --gold-dim: rgba(217, 119, 6, 0.06);
+  --purple: #7c3aed;
+  --red: #dc2626;
+  --red-dim: rgba(220, 38, 38, 0.06);
+  --yellow: #d97706;
+  --green: #059669;
 
   /* Typography */
   --font-display: 'Bebas Neue', sans-serif;
@@ -35,14 +35,17 @@
   --font-mono: 'IBM Plex Mono', monospace;
 
   /* Effects */
-  --glow-accent: 0 0 24px rgba(52, 211, 153, 0.12);
-  --glow-accent-strong: 0 0 32px rgba(52, 211, 153, 0.2), 0 0 80px rgba(52, 211, 153, 0.06);
-  --glow-gold: 0 0 24px rgba(251, 191, 36, 0.15);
+  --glow-accent: 0 2px 16px rgba(5, 150, 105, 0.12);
+  --glow-accent-strong: 0 4px 24px rgba(5, 150, 105, 0.18);
+  --glow-gold: 0 2px 16px rgba(217, 119, 6, 0.12);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md: 0 2px 8px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-lg: 0 4px 24px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.04);
 }
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(51, 65, 85, 0.4) transparent;
+  scrollbar-color: rgba(0, 0, 0, 0.12) transparent;
 }
 
 body {
@@ -54,29 +57,18 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Noise grain */
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  z-index: 9999;
-  pointer-events: none;
-  opacity: 0.018;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  background-size: 200px 200px;
-}
-
-/* Card system - glass morphism with warm tones */
+/* Card system */
 .card {
-  background: var(--surface-glass);
-  backdrop-filter: blur(20px) saturate(1.2);
+  background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: 16px;
   overflow: hidden;
-  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.3s ease, border-color 0.3s ease;
 }
 
 .card:hover {
+  box-shadow: var(--shadow-md);
   border-color: var(--border-hover);
 }
 
@@ -90,8 +82,8 @@ body::before {
 
 .card-header h2 {
   font-family: var(--font-display);
-  font-size: 18px;
-  letter-spacing: 1.5px;
+  font-size: 20px;
+  letter-spacing: 1px;
   color: var(--text);
 }
 
@@ -100,17 +92,17 @@ body::before {
   font-family: var(--font-mono);
   font-size: 10px;
   padding: 3px 10px;
-  border-radius: 5px;
+  border-radius: 6px;
   font-weight: 500;
   letter-spacing: 0.3px;
 }
 
 .badge-green { background: var(--accent-dim); color: var(--accent); border: 1px solid var(--accent-border); }
-.badge-yellow { background: var(--gold-dim); color: var(--gold); border: 1px solid rgba(251,191,36,0.2); }
-.badge-red { background: var(--red-dim); color: var(--red); border: 1px solid rgba(248,113,113,0.15); }
-.badge-purple { background: rgba(167,139,250,0.1); color: var(--purple); border: 1px solid rgba(167,139,250,0.15); }
+.badge-yellow { background: var(--gold-dim); color: var(--gold); border: 1px solid rgba(217,119,6,0.15); }
+.badge-red { background: var(--red-dim); color: var(--red); border: 1px solid rgba(220,38,38,0.1); }
+.badge-purple { background: rgba(124,58,237,0.06); color: var(--purple); border: 1px solid rgba(124,58,237,0.12); }
 
-/* Stat values - Bebas Neue for big numbers */
+/* Stat values */
 .stat-value {
   font-family: var(--font-display);
   letter-spacing: 0.02em;
@@ -122,13 +114,8 @@ body::before {
 
 /* Animations */
 @keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(12px); }
+  from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
 }
 
 @keyframes shimmer {
@@ -136,13 +123,8 @@ body::before {
   100% { background-position: 200% 0; }
 }
 
-@keyframes gradientShift {
-  0%, 100% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-}
-
 .animate-in {
-  animation: fadeInUp 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .animate-in-1 { animation-delay: 0.04s; }
@@ -152,33 +134,13 @@ body::before {
 .animate-in-5 { animation-delay: 0.2s; }
 .animate-in-6 { animation-delay: 0.24s; }
 
-/* Gradient border on hover */
-.glow-border {
-  position: relative;
-}
-
-.glow-border::before {
-  content: '';
-  position: absolute;
-  inset: -1px;
-  border-radius: 15px;
-  background: linear-gradient(135deg, var(--accent-border), transparent 50%, rgba(34,211,238,0.1));
-  z-index: -1;
-  opacity: 0;
-  transition: opacity 0.4s ease;
-}
-
-.glow-border:hover::before {
-  opacity: 1;
-}
-
 /* Primary button */
 .btn-primary {
   font-family: var(--font-display);
   font-size: 16px;
   letter-spacing: 1px;
   background: var(--accent);
-  color: var(--bg);
+  color: white;
   border: none;
   border-radius: 10px;
   cursor: pointer;
@@ -191,21 +153,11 @@ body::before {
   transform: translateY(-1px);
 }
 
-.btn-primary:active {
-  transform: translateY(0);
-}
-
 /* Pitch */
 .pitch-bg {
   background:
-    repeating-linear-gradient(
-      to bottom,
-      #14522a 0px,
-      #14522a 55px,
-      #186834 55px,
-      #186834 110px
-    );
-  box-shadow: inset 0 0 80px rgba(0,0,0,0.5);
+    repeating-linear-gradient(to bottom, #2d8a4e 0px, #2d8a4e 55px, #339956 55px, #339956 110px);
+  box-shadow: inset 0 0 60px rgba(0,0,0,0.15);
 }
 
 /* Data tables */
@@ -229,20 +181,16 @@ body::before {
 .data-table td {
   padding: 10px 14px;
   font-size: 13px;
-  border-bottom: 1px solid rgba(51, 65, 85, 0.2);
-}
-
-.data-table tr {
-  transition: background 0.15s ease;
+  border-bottom: 1px solid var(--border);
 }
 
 .data-table tr:hover {
-  background: rgba(52, 211, 153, 0.03);
+  background: var(--accent-dim);
 }
 
 /* Skeleton */
 .skeleton {
-  background: linear-gradient(90deg, var(--surface) 25%, var(--surface2) 50%, var(--surface) 75%);
+  background: linear-gradient(90deg, var(--surface2) 25%, var(--surface) 50%, var(--surface2) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
   border-radius: 8px;
@@ -250,8 +198,7 @@ body::before {
 
 /* Selection */
 ::selection {
-  background: rgba(52, 211, 153, 0.2);
-  color: #fff;
+  background: rgba(5, 150, 105, 0.15);
 }
 
 /* Transfer reason */
@@ -267,7 +214,7 @@ body::before {
 }
 
 /* Position badges */
-.pos-gkp { background: #b45309; color: #fef3c7; }
-.pos-def { background: #1d4ed8; color: #dbeafe; }
-.pos-mid { background: #059669; color: #d1fae5; }
-.pos-fwd { background: #dc2626; color: #fee2e2; }
+.pos-gkp { background: #b45309; color: #fff; }
+.pos-def { background: #1d4ed8; color: #fff; }
+.pos-mid { background: #059669; color: #fff; }
+.pos-fwd { background: #dc2626; color: #fff; }
