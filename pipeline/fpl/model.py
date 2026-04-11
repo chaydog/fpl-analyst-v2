@@ -51,15 +51,16 @@ class PointsPredictor:
 
             # Recency weighting: recent GWs matter more
             # Exponential decay: weight = decay ^ (max_gw - gw)
-            decay = 0.97
+            # Tuned via walk-forward backtest across GW15-31
+            decay = 0.96
             train_rounds = pos_df.loc[train_mask, "round"]
             max_round = train_rounds.max()
             sample_weights = decay ** (max_round - train_rounds)
-            sample_weights = sample_weights / sample_weights.mean()  # normalize
+            sample_weights = sample_weights / sample_weights.mean()
 
-            # XGBoost
+            # XGBoost - tuned: 250 trees, depth 5, lr 0.04
             xgb = XGBRegressor(
-                n_estimators=300, max_depth=5, learning_rate=0.05,
+                n_estimators=250, max_depth=5, learning_rate=0.04,
                 subsample=0.8, colsample_bytree=0.8,
                 reg_alpha=0.1, reg_lambda=1.0,
                 random_state=42,
@@ -71,17 +72,17 @@ class PointsPredictor:
                 verbose=False,
             )
 
-            # Random Forest
+            # Random Forest - tuned: depth 8
             rf = RandomForestRegressor(
-                n_estimators=200, max_depth=10, min_samples_leaf=10,
+                n_estimators=200, max_depth=8, min_samples_leaf=10,
                 random_state=42, n_jobs=-1,
             )
             rf.fit(X_train, y_train, sample_weight=sample_weights.values)
 
-            # Ensemble predictions
+            # Ensemble: RF-heavy (0.4 XGB / 0.6 RF) - better generalisation
             xgb_pred = xgb.predict(X_val)
             rf_pred = rf.predict(X_val)
-            ensemble_pred = 0.6 * xgb_pred + 0.4 * rf_pred
+            ensemble_pred = 0.4 * xgb_pred + 0.6 * rf_pred
 
             mae = mean_absolute_error(y_val, ensemble_pred)
             rmse = np.sqrt(mean_squared_error(y_val, ensemble_pred))
@@ -110,7 +111,7 @@ class PointsPredictor:
             X = features_df.loc[mask, available_cols].fillna(0)
             xgb_pred = model_dict["xgb"].predict(X)
             rf_pred = model_dict["rf"].predict(X)
-            predictions.loc[mask] = 0.6 * xgb_pred + 0.4 * rf_pred
+            predictions.loc[mask] = 0.4 * xgb_pred + 0.6 * rf_pred
 
         # Multiply by availability chance
         if "chance_of_playing" in features_df.columns:
