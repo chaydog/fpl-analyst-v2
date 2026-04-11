@@ -1,6 +1,37 @@
 import type { Player, SquadPlayer, TransferRec, TransferPlayer, Horizon } from "./types";
 import { POS_MAP } from "./types";
 
+function filterCandidates(
+  allPlayers: Player[],
+  filters: {
+    element_type: number;
+    excludeIds: Set<number>;
+    maxCost: number;
+    horizon: Horizon;
+    teamCounts: Record<number, number>;
+  }
+): Player[] {
+  const base = allPlayers.filter(
+    (p) =>
+      p.element_type === filters.element_type &&
+      !filters.excludeIds.has(p.player_id) &&
+      p.now_cost <= filters.maxCost &&
+      getXpts(p, filters.horizon) > 0 &&
+      (filters.teamCounts[p.team_id] || 0) < 3
+  );
+
+  // Try strict: form >= 1 and starting regularly
+  const strict = base.filter((p) => (p.form || 0) >= 1 && (p.start_rate_5 || 0) >= 0.4);
+  if (strict.length >= 3) return strict;
+
+  // Fallback: just exclude players with zero minutes
+  const loose = base.filter((p) => (p.start_rate_5 || 0) > 0);
+  if (loose.length >= 1) return loose;
+
+  // Last resort: return all
+  return base;
+}
+
 function getXpts(p: { predicted_pts_1gw: number; predicted_pts_5gw: number }, horizon: Horizon): number {
   return horizon === 1 ? p.predicted_pts_1gw : p.predicted_pts_5gw;
 }
@@ -87,16 +118,13 @@ export function recommendTransfers(
         const sellValue = sell.selling_price || sell.now_cost;
         const budget = bank + sellValue;
 
-        const candidates = allPlayers.filter(
-          (p) =>
-            p.element_type === sell.element_type &&
-            !remainingIds.has(p.player_id) &&
-            p.now_cost <= budget &&
-            getXpts(p, horizon) > 0 &&
-            (teamCounts[p.team_id] || 0) < 3 &&
-            (p.form || 0) >= 1 &&
-            (p.start_rate_5 || 0) >= 0.4
-        );
+        const candidates = filterCandidates(allPlayers, {
+          element_type: sell.element_type,
+          excludeIds: remainingIds,
+          maxCost: budget,
+          horizon,
+          teamCounts,
+        });
 
         if (candidates.length === 0) continue;
         candidates.sort((a, b) => getXpts(b, horizon) - getXpts(a, horizon));
@@ -143,17 +171,14 @@ export function recommendTransfers(
           let valid = true;
 
           for (const sell of sells) {
-            const candidates = allPlayers.filter(
-              (p) =>
-                p.element_type === sell.element_type &&
-                !remainingIds.has(p.player_id) &&
-                !boughtIds.has(p.player_id) &&
-                p.now_cost <= budgetLeft &&
-                getXpts(p, horizon) > 0 &&
-                (teamCounts[p.team_id] || 0) < 3 &&
-                (p.form || 0) >= 1 &&
-                (p.start_rate_5 || 0) >= 0.4
-            );
+            const excludeIds = new Set([...remainingIds, ...boughtIds]);
+            const candidates = filterCandidates(allPlayers, {
+              element_type: sell.element_type,
+              excludeIds,
+              maxCost: budgetLeft,
+              horizon,
+              teamCounts,
+            });
 
             if (candidates.length === 0) { valid = false; break; }
             candidates.sort((a, b) => getXpts(b, horizon) - getXpts(a, horizon));
@@ -218,18 +243,14 @@ export function findReplacements(
   const replacements: ReplacementResult[] = [];
 
   for (const sell of sellPlayers) {
-    const candidates = allPlayers
-      .filter(
-        (p) =>
-          p.element_type === sell.element_type &&
-          !remainingIds.has(p.player_id) &&
-          !boughtIds.has(p.player_id) &&
-          getXpts(p, horizon) > 0 &&
-          p.now_cost <= budgetLeft &&
-          (teamCounts[p.team_id] || 0) < 3 &&
-          (p.form || 0) >= 1 && // exclude players with no recent returns
-          (p.start_rate_5 || 0) >= 0.4 // exclude players barely playing
-      )
+    const excludeIds = new Set([...remainingIds, ...boughtIds]);
+    const candidates = filterCandidates(allPlayers, {
+      element_type: sell.element_type,
+      excludeIds,
+      maxCost: budgetLeft,
+      horizon,
+      teamCounts,
+    })
       .sort((a, b) => getXpts(b, horizon) - getXpts(a, horizon))
       .slice(0, 5);
 
