@@ -118,7 +118,7 @@ function PlayerCard({
       {/* Kit image - squarer proportions */}
       <div
         className={`relative flex items-center justify-center transition-all duration-200 ${
-          small ? "w-[36px] h-[36px] sm:w-[40px] sm:h-[40px]" : "w-[42px] h-[42px] sm:w-[52px] sm:h-[52px]"
+          small ? "w-[44px] h-[44px] sm:w-[50px] sm:h-[50px]" : "w-[54px] h-[54px] sm:w-[68px] sm:h-[68px]"
         } ${clickable ? "group-hover:scale-115 group-hover:-translate-y-1" : ""} ${
           selected ? "grayscale scale-90 opacity-40" : ""
         }`}
@@ -144,15 +144,15 @@ function PlayerCard({
         )}
       </div>
       {/* Name pill */}
-      <div className={`font-semibold text-center text-white px-2 py-[2px] rounded-md max-w-full overflow-hidden text-ellipsis whitespace-nowrap mt-0.5 ${
+      <div className={`font-semibold text-center px-2 py-[2px] rounded-md max-w-full overflow-hidden text-ellipsis whitespace-nowrap mt-0.5 ${
         small ? "text-[9px]" : "text-[9px] sm:text-[10px]"
-      } ${selected ? "bg-[var(--red)]" : "bg-black/60 backdrop-blur-sm"}`}
+      } ${selected ? "bg-[var(--red)] text-white" : "bg-[var(--text)] text-[var(--bg)]"}`}
         style={{ fontFamily: 'var(--font-body)' }}>
         {p.web_name}
       </div>
       {/* xPts */}
-      <div className="text-[9px] sm:text-[10px] font-bold mt-[2px] text-white/80"
-        style={{ fontFamily: 'var(--font-mono)', textShadow: '0 1px 3px rgba(0,0,0,0.4)' }}>
+      <div className={`text-[9px] sm:text-[10px] font-bold mt-[2px] ${small ? "text-[var(--text-muted)]" : "text-white/90"}`}
+        style={{ fontFamily: 'var(--font-mono)', textShadow: small ? 'none' : '0 1px 3px rgba(0,0,0,0.4)' }}>
         {xpts} {!small && label}
       </div>
     </div>
