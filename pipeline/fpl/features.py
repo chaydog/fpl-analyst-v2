@@ -45,6 +45,9 @@ class FeatureBuilder:
         # Yellow card suspension risk
         df = self._add_card_features(df)
 
+        # Opponent defensive weakness
+        df = self._add_opponent_defensive_features(df)
+
         # DGW multiplier (for training data)
         df = self._add_dgw_features(df)
 
@@ -102,6 +105,9 @@ class FeatureBuilder:
         # Yellow card / suspension risk
         latest = self._add_prediction_card_features(latest)
 
+        # Opponent defensive weakness
+        latest = self._add_prediction_opponent_defensive(latest)
+
         if "chance_of_playing_next_round" in latest.columns:
             latest["chance_of_playing"] = pd.to_numeric(
                 latest["chance_of_playing_next_round"], errors="coerce"
@@ -147,6 +153,7 @@ class FeatureBuilder:
         base = self._add_availability_features(base)
         base = self._add_injury_return_features(base)
         base = self._add_prediction_card_features(base)
+        base = self._add_prediction_opponent_defensive(base)
 
         if "chance_of_playing_next_round" in base.columns:
             base["chance_of_playing"] = pd.to_numeric(
@@ -160,6 +167,7 @@ class FeatureBuilder:
             "is_home", "opponent_difficulty", "team_attack_strength",
             "opponent_defence_strength", "relative_strength",
             "has_fixture", "opponent_team_next", "next_gw",
+            "opp_goals_conceded_4", "opp_xgc_4",
         ]
         base_clean = base.drop(
             columns=[c for c in fixture_cols_to_drop if c in base.columns],
@@ -171,6 +179,7 @@ class FeatureBuilder:
             gw_features = base_clean.copy()
             gw_features["next_gw"] = gw
             gw_features = self._add_prediction_fixture_features(gw_features, gw)
+            gw_features = self._add_prediction_opponent_defensive(gw_features)
             result[gw] = gw_features
 
         return result
@@ -208,6 +217,10 @@ class FeatureBuilder:
             "yellow_card_total", "suspension_risk",
             # DGW
             "n_fixtures_in_gw",
+            # Opponent defensive weakness (rolling 4 GWs)
+            "opp_goals_conceded_4", "opp_xgc_4",
+            # Creativity / threat per 90
+            "creativity_per90", "threat_per90",
         ]
 
     def _add_rolling_features(self, df: pd.DataFrame, shift: bool = True) -> pd.DataFrame:
@@ -248,7 +261,8 @@ class FeatureBuilder:
         safe_mins = mins.clip(lower=30)  # avoid div by zero for low-minute players
 
         for stat, col in [("xg", "rolling_5_xg"), ("xa", "rolling_5_xa"),
-                          ("xgi", "rolling_5_xgi"), ("bps", "rolling_5_bps")]:
+                          ("xgi", "rolling_5_xgi"), ("bps", "rolling_5_bps"),
+                          ("creativity", "rolling_5_creativity"), ("threat", "rolling_5_threat")]:
             if col in df.columns:
                 df[f"{stat}_per90"] = df[col] / safe_mins * 90
             else:
@@ -424,6 +438,95 @@ class FeatureBuilder:
         df["start_rate_5"] = grouped["minutes"].transform(
             lambda x: (x.shift(1) > 0).rolling(5, min_periods=1).mean()
         )
+        return df
+
+    def _build_team_defensive_rolling(self) -> dict:
+        """Build rolling defensive stats per team from fixture results.
+
+        Returns dict: {(team_id, gw): {"goals_conceded_4": X, "xgc_4": X}}
+        """
+        # Aggregate goals conceded and xGC per team per GW from player history
+        if not hasattr(self, 'history') or self.history.empty:
+            return {}
+
+        # Group by team and round, sum goals_conceded and expected_goals_conceded
+        # Use one player per team per GW (goals_conceded is same for all players on same team)
+        h = self.history.copy()
+        team_gw = h.groupby(["team", "round"]).agg({
+            "goals_conceded": "first",
+        }).reset_index()
+
+        if "expected_goals_conceded" in h.columns:
+            xgc = h.groupby(["team", "round"])["expected_goals_conceded"].first().reset_index()
+            team_gw = team_gw.merge(xgc, on=["team", "round"], how="left")
+        else:
+            team_gw["expected_goals_conceded"] = team_gw["goals_conceded"]
+
+        team_gw = team_gw.sort_values(["team", "round"])
+
+        result = {}
+        for team_id in team_gw["team"].unique():
+            t = team_gw[team_gw["team"] == team_id].copy()
+            t["gc_rolling_4"] = t["goals_conceded"].rolling(4, min_periods=1).mean()
+            t["xgc_rolling_4"] = t["expected_goals_conceded"].rolling(4, min_periods=1).mean()
+
+            for _, row in t.iterrows():
+                result[(int(team_id), int(row["round"]))] = {
+                    "goals_conceded_4": round(float(row["gc_rolling_4"]), 2),
+                    "xgc_4": round(float(row["xgc_rolling_4"]), 2),
+                }
+
+        return result
+
+    def _add_opponent_defensive_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Add rolling opponent defensive weakness to training data."""
+        team_def = self._build_team_defensive_rolling()
+
+        if "opponent_team" in df.columns and "round" in df.columns:
+            df["opp_goals_conceded_4"] = df.apply(
+                lambda r: team_def.get(
+                    (int(r.get("opponent_team", 0)), int(r.get("round", 0)) - 1), {}
+                ).get("goals_conceded_4", 1.0),
+                axis=1,
+            )
+            df["opp_xgc_4"] = df.apply(
+                lambda r: team_def.get(
+                    (int(r.get("opponent_team", 0)), int(r.get("round", 0)) - 1), {}
+                ).get("xgc_4", 1.0),
+                axis=1,
+            )
+        else:
+            df["opp_goals_conceded_4"] = 1.0
+            df["opp_xgc_4"] = 1.0
+
+        return df
+
+    def _add_prediction_opponent_defensive(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Add opponent defensive weakness for prediction (uses latest data)."""
+        team_def = self._build_team_defensive_rolling()
+
+        # Get latest GW per team
+        latest = {}
+        for (team_id, gw), stats in team_def.items():
+            if team_id not in latest or gw > latest[team_id][0]:
+                latest[team_id] = (gw, stats)
+
+        if "opponent_team_next" in df.columns:
+            opp_col = "opponent_team_next"
+        elif "opponent_team" in df.columns:
+            opp_col = "opponent_team"
+        else:
+            df["opp_goals_conceded_4"] = 1.0
+            df["opp_xgc_4"] = 1.0
+            return df
+
+        df["opp_goals_conceded_4"] = df[opp_col].map(
+            lambda t: latest.get(int(t), (0, {}))[1].get("goals_conceded_4", 1.0) if pd.notna(t) and int(t) > 0 else 1.0
+        )
+        df["opp_xgc_4"] = df[opp_col].map(
+            lambda t: latest.get(int(t), (0, {}))[1].get("xgc_4", 1.0) if pd.notna(t) and int(t) > 0 else 1.0
+        )
+
         return df
 
     def _add_injury_return_features(self, df: pd.DataFrame) -> pd.DataFrame:
