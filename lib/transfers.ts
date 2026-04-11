@@ -93,7 +93,9 @@ export function recommendTransfers(
             !remainingIds.has(p.player_id) &&
             p.now_cost <= budget &&
             getXpts(p, horizon) > 0 &&
-            (teamCounts[p.team_id] || 0) < 3
+            (teamCounts[p.team_id] || 0) < 3 &&
+            (p.form || 0) >= 1 &&
+            (p.start_rate_5 || 0) >= 0.4
         );
 
         if (candidates.length === 0) continue;
@@ -148,7 +150,9 @@ export function recommendTransfers(
                 !boughtIds.has(p.player_id) &&
                 p.now_cost <= budgetLeft &&
                 getXpts(p, horizon) > 0 &&
-                (teamCounts[p.team_id] || 0) < 3
+                (teamCounts[p.team_id] || 0) < 3 &&
+                (p.form || 0) >= 1 &&
+                (p.start_rate_5 || 0) >= 0.4
             );
 
             if (candidates.length === 0) { valid = false; break; }
@@ -222,7 +226,9 @@ export function findReplacements(
           !boughtIds.has(p.player_id) &&
           getXpts(p, horizon) > 0 &&
           p.now_cost <= budgetLeft &&
-          (teamCounts[p.team_id] || 0) < 3
+          (teamCounts[p.team_id] || 0) < 3 &&
+          (p.form || 0) >= 1 && // exclude players with no recent returns
+          (p.start_rate_5 || 0) >= 0.4 // exclude players barely playing
       )
       .sort((a, b) => getXpts(b, horizon) - getXpts(a, horizon))
       .slice(0, 5);
