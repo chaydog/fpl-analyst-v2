@@ -33,7 +33,7 @@ export async function GET(
       getEntryHistory(teamId),
     ]);
 
-    // Find current GW
+    // Find current and next GW
     const currentEvents = (history.current || []).filter(
       (e: Record<string, number>) => (e.points ?? 0) > 0
     );
@@ -46,7 +46,18 @@ export async function GET(
       (e: Record<string, number>) => e.event === latestGw
     );
 
-    const picksData = await getPicks(teamId, latestGw);
+    // Try fetching picks for the next GW (reflects recent transfers)
+    // Fall back to latest completed GW if next GW picks aren't available
+    const currentGw = entry.current_event || latestGw;
+    let picksGw = currentGw;
+    let picksData;
+    try {
+      picksData = await getPicks(teamId, currentGw);
+    } catch {
+      // Current GW picks not available, use latest
+      picksData = await getPicks(teamId, latestGw);
+      picksGw = latestGw;
+    }
     const picks = picksData.picks as Array<{
       element: number;
       is_captain: boolean;
