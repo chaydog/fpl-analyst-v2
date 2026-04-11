@@ -45,6 +45,9 @@ class FeatureBuilder:
         # Yellow card suspension risk
         df = self._add_card_features(df)
 
+        # Per-player home/away splits
+        df = self._add_home_away_splits(df, shift=True)
+
         # Opponent defensive weakness
         df = self._add_opponent_defensive_features(df)
 
@@ -104,6 +107,9 @@ class FeatureBuilder:
         # Availability features
         latest = self._add_availability_features(latest)
 
+        # Per-player home/away splits
+        latest = self._add_home_away_splits(latest, shift=False)
+
         # Injury return detection
         latest = self._add_injury_return_features(latest)
 
@@ -160,6 +166,7 @@ class FeatureBuilder:
         )
         base = self._add_set_piece_features(base)
         base = self._add_availability_features(base)
+        base = self._add_home_away_splits(base, shift=False)
         base = self._add_injury_return_features(base)
         base = self._add_prediction_card_features(base)
         base = self._add_prediction_opponent_defensive(base)
@@ -230,6 +237,9 @@ class FeatureBuilder:
             "opp_goals_conceded_4", "opp_xgc_4",
             # Creativity / threat per 90
             "creativity_per90", "threat_per90",
+            # Per-player home/away splits
+            "home_pts_avg", "away_pts_avg", "home_away_diff",
+            "home_xgi_avg", "away_xgi_avg",
         ]
 
     def _add_rolling_features(self, df: pd.DataFrame, shift: bool = True) -> pd.DataFrame:
@@ -535,6 +545,68 @@ class FeatureBuilder:
         df["opp_xgc_4"] = df[opp_col].map(
             lambda t: latest.get(int(t), (0, {}))[1].get("xgc_4", 1.0) if pd.notna(t) and int(t) > 0 else 1.0
         )
+
+        return df
+
+    def _add_home_away_splits(self, df: pd.DataFrame, shift: bool = True) -> pd.DataFrame:
+        """Per-player home vs away performance splits.
+
+        Some players are dramatically better at home (e.g. Fernandes
+        10+ hauls in every home game under Carrick). This captures that
+        individual tendency rather than a generic home advantage.
+        """
+        if "was_home" not in df.columns or "total_points" not in df.columns:
+            df["home_pts_avg"] = 2.0
+            df["away_pts_avg"] = 2.0
+            df["home_away_diff"] = 0.0
+            df["home_xgi_avg"] = 0.0
+            df["away_xgi_avg"] = 0.0
+            return df
+
+        has_xgi = "expected_goal_involvements" in df.columns
+
+        def calc_splits(group):
+            pts = group["total_points"].astype(float)
+            home = group["was_home"].astype(bool)
+            xgi = pd.to_numeric(group["expected_goal_involvements"], errors="coerce").fillna(0) if has_xgi else pd.Series(0.0, index=group.index)
+
+            n = len(group)
+            home_pts = np.full(n, 2.0)
+            away_pts = np.full(n, 2.0)
+            home_xgi = np.full(n, 0.0)
+            away_xgi = np.full(n, 0.0)
+
+            for i in range(1 if shift else 0, n):
+                # Use all data before this row (or including for prediction)
+                end = i if shift else i + 1
+                if end == 0:
+                    continue
+
+                past = group.iloc[:end]
+                past_home = past[past["was_home"] == True]
+                past_away = past[past["was_home"] == False]
+
+                if len(past_home) >= 2:
+                    home_pts[i] = past_home["total_points"].astype(float).mean()
+                    if has_xgi:
+                        home_xgi[i] = pd.to_numeric(past_home["expected_goal_involvements"], errors="coerce").fillna(0).mean()
+
+                if len(past_away) >= 2:
+                    away_pts[i] = past_away["total_points"].astype(float).mean()
+                    if has_xgi:
+                        away_xgi[i] = pd.to_numeric(past_away["expected_goal_involvements"], errors="coerce").fillna(0).mean()
+
+            return pd.DataFrame({
+                "home_pts_avg": home_pts,
+                "away_pts_avg": away_pts,
+                "home_away_diff": home_pts - away_pts,
+                "home_xgi_avg": home_xgi,
+                "away_xgi_avg": away_xgi,
+            }, index=group.index)
+
+        result = df.groupby("player_id", group_keys=False).apply(calc_splits)
+        for col in ["home_pts_avg", "away_pts_avg", "home_away_diff", "home_xgi_avg", "away_xgi_avg"]:
+            df[col] = result[col].values
 
         return df
 
