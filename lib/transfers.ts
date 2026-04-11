@@ -227,17 +227,48 @@ export function findReplacements(
       .sort((a, b) => getXpts(b, horizon) - getXpts(a, horizon))
       .slice(0, 5);
 
-    const options = candidates.map((p) => ({
-      player_id: p.player_id,
-      name: p.web_name,
-      team: p.team_name,
-      position: POS_MAP[p.element_type],
-      cost: Math.round((p.now_cost / 10) * 10) / 10,
-      xpts: Math.round(getXpts(p, horizon) * 10) / 10,
-      form: Math.round((p.form || 0) * 10) / 10,
-      xgi90: Math.round((p.xgi_per90 || 0) * 100) / 100,
-      penalty: p.is_penalty_taker,
-    }));
+    const options = candidates.map((p) => {
+      // Build reasoning tags explaining why the model rates this player
+      const tags: string[] = [];
+
+      if (p.opponent_difficulty <= 2) tags.push("Easy fixture");
+      else if (p.opponent_difficulty >= 4) tags.push("Tough fixture");
+
+      if (p.is_home) tags.push("Home");
+      if ((p as any).n_fixtures_in_gw >= 2) tags.push("DGW");
+      if (p.is_penalty_taker) tags.push("Penalties");
+
+      if (p.form >= 5) tags.push("In form");
+      else if (p.form >= 3) tags.push("Decent form");
+
+      if (p.xgi_per90 >= 0.4) tags.push("High xGI");
+      if (p.start_rate_5 >= 0.9) tags.push("Nailed");
+      else if (p.start_rate_5 < 0.6) tags.push("Rotation risk");
+
+      if ((p as any).returning_from_injury) tags.push("Back from injury");
+      if ((p as any).suspension_risk) tags.push("Yellow card risk");
+
+      // Cost comparison
+      const sellCost = sell.now_cost;
+      const saving = sellCost - p.now_cost;
+      if (saving > 5) tags.push(`Saves ${(saving / 10).toFixed(1)}m`);
+
+      return {
+        player_id: p.player_id,
+        name: p.web_name,
+        team: p.team_name,
+        position: POS_MAP[p.element_type],
+        cost: Math.round((p.now_cost / 10) * 10) / 10,
+        xpts: Math.round(getXpts(p, horizon) * 10) / 10,
+        xpts_1gw: Math.round(p.predicted_pts_1gw * 10) / 10,
+        form: Math.round((p.form || 0) * 10) / 10,
+        xgi90: Math.round((p.xgi_per90 || 0) * 100) / 100,
+        penalty: p.is_penalty_taker,
+        difficulty: p.opponent_difficulty,
+        is_home: p.is_home,
+        tags,
+      };
+    });
 
     const selected = options.length > 0 ? options[0] : null;
 

@@ -249,14 +249,40 @@ export default function TransferSimulator({
                           <div>
                             <div className="text-[13px] font-semibold">
                               {opt.name as string}
-                              {!!opt.penalty && <span className="text-[var(--yellow)] text-[10px] ml-1">PEN</span>}
                             </div>
                             <div className="text-[11px] text-[var(--text-muted)]">
                               {opt.team as string} - {opt.cost as number}m - Form: {opt.form as number} - xGI/90: {opt.xgi90 as number}
                             </div>
+                            {(opt as any).tags?.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-1.5">
+                                {((opt as any).tags as string[]).map((tag: string, ti: number) => {
+                                  const color =
+                                    tag === "Easy fixture" || tag === "In form" || tag === "Nailed" || tag === "Home"
+                                      ? "bg-[var(--accent-dim)] text-[var(--accent)] border-[var(--accent-border)]"
+                                    : tag === "DGW" || tag === "High xGI" || tag === "Penalties"
+                                      ? "bg-[var(--gold-dim)] text-[var(--gold)] border-[rgba(217,119,6,0.15)]"
+                                    : tag.includes("Saves")
+                                      ? "bg-[rgba(124,58,237,0.06)] text-[var(--purple)] border-[rgba(124,58,237,0.12)]"
+                                    : tag === "Tough fixture" || tag === "Rotation risk" || tag === "Back from injury" || tag === "Yellow card risk"
+                                      ? "bg-[var(--red-dim)] text-[var(--red)] border-[rgba(220,38,38,0.1)]"
+                                      : "bg-[var(--surface2)] text-[var(--text-muted)] border-[var(--border)]";
+                                  return (
+                                    <span key={ti} className={`text-[9px] font-medium px-1.5 py-[1px] rounded border ${color}`}
+                                      style={{ fontFamily: 'var(--font-mono)' }}>
+                                      {tag}
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
                         </div>
-                        <div className="text-sm font-bold text-[var(--accent)]">{opt.xpts as number} xPts</div>
+                        <div className="text-right shrink-0">
+                          <div className="text-sm font-bold text-[var(--accent)]">{opt.xpts as number}</div>
+                          <div className="text-[9px] text-[var(--text-muted)]" style={{ fontFamily: 'var(--font-mono)' }}>
+                            {(opt as any).xpts_1gw ?? opt.xpts as number} this GW
+                          </div>
+                        </div>
                       </div>
                     );
                   })}
