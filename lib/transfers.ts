@@ -270,7 +270,6 @@ export function findReplacements(
 
       if (p.xgi_per90 >= 0.4) tags.push("High xGI");
       if (p.start_rate_5 >= 0.9) tags.push("Nailed");
-      else if (p.start_rate_5 < 0.6) tags.push("Rotation risk");
 
       if ((p as any).returning_from_injury) tags.push("Back from injury");
       if ((p as any).suspension_risk) tags.push("Yellow card risk");
