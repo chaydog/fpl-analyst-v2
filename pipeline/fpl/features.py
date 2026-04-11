@@ -65,7 +65,12 @@ class FeatureBuilder:
             next_gw = self._get_next_gw()
 
         # Get latest rolling stats per player from history
+        # Exclude current (incomplete) GW to prevent bias towards teams that
+        # have already played while others haven't
         df = self.history.copy()
+        current_gw = self._get_current_gw()
+        if current_gw and not self._is_gw_finished(current_gw):
+            df = df[df["round"] != current_gw]
         df = df.sort_values(["player_id", "round"]).reset_index(drop=True)
         df = self._add_rolling_features(df, shift=False)
         df = self._add_per90_features(df)
@@ -128,7 +133,11 @@ class FeatureBuilder:
         gw_ids = list(range(start_gw, start_gw + n_gws))
 
         # Build base stats once (expensive part)
+        # Exclude incomplete current GW
         df = self.history.copy()
+        current_gw = self._get_current_gw()
+        if current_gw and not self._is_gw_finished(current_gw):
+            df = df[df["round"] != current_gw]
         df = df.sort_values(["player_id", "round"]).reset_index(drop=True)
         df = self._add_rolling_features(df, shift=False)
         df = self._add_per90_features(df)
@@ -635,6 +644,22 @@ class FeatureBuilder:
             df["n_fixtures_in_gw"] = 1
 
         return df
+
+    def _get_current_gw(self) -> int | None:
+        """Get the current active GW (may be in progress)."""
+        gws = self.gameweeks
+        current = gws[gws["is_current"] == True] if "is_current" in gws.columns else pd.DataFrame()
+        if len(current) > 0:
+            return int(current.iloc[0]["id"])
+        return None
+
+    def _is_gw_finished(self, gw: int) -> bool:
+        """Check if a specific GW is finished."""
+        gws = self.gameweeks
+        row = gws[gws["id"] == gw]
+        if len(row) > 0 and "finished" in row.columns:
+            return bool(row.iloc[0]["finished"])
+        return False
 
     def _get_next_gw(self) -> int:
         gws = self.gameweeks
