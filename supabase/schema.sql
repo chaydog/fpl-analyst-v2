@@ -68,6 +68,21 @@ CREATE TABLE IF NOT EXISTS teams (
   strength_defence_away INT
 );
 
+-- Prediction log: stores what we predicted vs what happened
+CREATE TABLE IF NOT EXISTS prediction_log (
+  player_id     INT NOT NULL,
+  gameweek      INT NOT NULL,
+  predicted_pts REAL NOT NULL,
+  actual_pts    REAL,              -- filled in after GW completes
+  error         REAL,              -- actual - predicted
+  logged_at     TIMESTAMPTZ DEFAULT NOW(),
+  PRIMARY KEY (player_id, gameweek)
+);
+
+CREATE INDEX IF NOT EXISTS idx_prediction_log_gw ON prediction_log(gameweek);
+
+CREATE POLICY "Public read access" ON prediction_log FOR SELECT USING (true);
+
 -- Pipeline run metadata
 CREATE TABLE IF NOT EXISTS pipeline_runs (
   id            SERIAL PRIMARY KEY,

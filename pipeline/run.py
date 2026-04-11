@@ -213,11 +213,81 @@ def main():
     sb.table("teams").upsert(team_rows).execute()
     print(f"  Uploaded {len(team_rows)} teams")
 
-    # 9. Log pipeline run
+    # 9. Log predictions for accuracy tracking
+    print("\n--- Logging predictions for accuracy tracking ---")
+    pred_log_rows = []
+    for row in predictions_rows:
+        pred_log_rows.append({
+            "player_id": row["player_id"],
+            "gameweek": next_gw,
+            "predicted_pts": row["predicted_pts_1gw"],
+        })
+
+    for i in range(0, len(pred_log_rows), batch_size):
+        batch = pred_log_rows[i:i + batch_size]
+        sb.table("prediction_log").upsert(batch).execute()
+    print(f"  Logged {len(pred_log_rows)} predictions for GW{next_gw}")
+
+    # 10. Backfill actuals for completed GWs
+    print("\n--- Backfilling actual results ---")
+    # Find prediction_log rows missing actual_pts
+    unfilled = sb.table("prediction_log").select("gameweek").is_("actual_pts", "null").execute()
+    unfilled_gws = set(r["gameweek"] for r in (unfilled.data or []))
+
+    if unfilled_gws:
+        # Get actual points from history
+        history = pd.read_parquet("data/processed/history.parquet")
+        for gw in unfilled_gws:
+            gw_actuals = history[history["round"] == gw][["player_id", "total_points"]].copy()
+            if gw_actuals.empty:
+                continue
+
+            updates = []
+            for _, row in gw_actuals.iterrows():
+                actual = safe_float(row["total_points"])
+                updates.append({
+                    "player_id": int(row["player_id"]),
+                    "gameweek": int(gw),
+                    "actual_pts": actual,
+                })
+
+            for i in range(0, len(updates), batch_size):
+                batch = updates[i:i + batch_size]
+                for item in batch:
+                    sb.table("prediction_log").update({
+                        "actual_pts": item["actual_pts"],
+                        "error": round(item["actual_pts"] - (
+                            sb.table("prediction_log")
+                            .select("predicted_pts")
+                            .eq("player_id", item["player_id"])
+                            .eq("gameweek", item["gameweek"])
+                            .execute().data[0]["predicted_pts"]
+                            if sb.table("prediction_log").select("predicted_pts").eq("player_id", item["player_id"]).eq("gameweek", item["gameweek"]).execute().data
+                            else 0
+                        ), 2),
+                    }).eq("player_id", item["player_id"]).eq("gameweek", item["gameweek"]).execute()
+
+            print(f"  Backfilled GW{gw}: {len(updates)} actuals")
+
+    # 11. Calculate and log accuracy metrics
+    accuracy_data = sb.table("prediction_log").select("*").not_.is_("actual_pts", "null").execute()
+    if accuracy_data.data:
+        import numpy as np
+        preds = [r["predicted_pts"] for r in accuracy_data.data]
+        actuals = [r["actual_pts"] for r in accuracy_data.data]
+        mae = round(float(np.mean(np.abs(np.array(actuals) - np.array(preds)))), 3)
+        corr = round(float(np.corrcoef(actuals, preds)[0, 1]) if len(actuals) > 1 else 0, 3)
+        n_gws = len(set(r["gameweek"] for r in accuracy_data.data))
+        print(f"  Model accuracy across {n_gws} GWs: MAE={mae}, correlation={corr}")
+        accuracy_metrics = {"mae": mae, "correlation": corr, "n_gws": n_gws, "n_predictions": len(preds)}
+    else:
+        accuracy_metrics = {}
+
+    # 12. Log pipeline run
     sb.table("pipeline_runs").insert({
         "next_gw": next_gw,
         "players_count": len(predictions_rows),
-        "model_metrics": metrics,
+        "model_metrics": {**metrics, "accuracy": accuracy_metrics},
     }).execute()
 
     print(f"\n=== Pipeline complete. Next GW: {next_gw}, {len(predictions_rows)} players predicted ===")

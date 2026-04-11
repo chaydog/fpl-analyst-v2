@@ -49,6 +49,14 @@ class PointsPredictor:
                 print(f"  Skipping {pos_name}: insufficient train/val split")
                 continue
 
+            # Recency weighting: recent GWs matter more
+            # Exponential decay: weight = decay ^ (max_gw - gw)
+            decay = 0.97
+            train_rounds = pos_df.loc[train_mask, "round"]
+            max_round = train_rounds.max()
+            sample_weights = decay ** (max_round - train_rounds)
+            sample_weights = sample_weights / sample_weights.mean()  # normalize
+
             # XGBoost
             xgb = XGBRegressor(
                 n_estimators=300, max_depth=5, learning_rate=0.05,
@@ -58,6 +66,7 @@ class PointsPredictor:
             )
             xgb.fit(
                 X_train, y_train,
+                sample_weight=sample_weights.values,
                 eval_set=[(X_val, y_val)],
                 verbose=False,
             )
@@ -67,7 +76,7 @@ class PointsPredictor:
                 n_estimators=200, max_depth=10, min_samples_leaf=10,
                 random_state=42, n_jobs=-1,
             )
-            rf.fit(X_train, y_train)
+            rf.fit(X_train, y_train, sample_weight=sample_weights.values)
 
             # Ensemble predictions
             xgb_pred = xgb.predict(X_val)
