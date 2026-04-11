@@ -6,4 +6,8 @@ out/
 pipeline/.venv/
 pipeline/__pycache__/
 pipeline/fpl/__pycache__/
+pipeline/data/
+pipeline/models/
+pipeline/backtest_results.csv
+pipeline/backtest_predictions.csv
 *.pyc
