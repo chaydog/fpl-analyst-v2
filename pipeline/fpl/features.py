@@ -45,6 +45,9 @@ class FeatureBuilder:
         # Yellow card suspension risk
         df = self._add_card_features(df)
 
+        # Consistency (blank/return rate)
+        df = self._add_consistency_features(df, shift=True)
+
         # Per-player home/away splits
         df = self._add_home_away_splits(df, shift=True)
 
@@ -110,6 +113,9 @@ class FeatureBuilder:
         # Availability features
         latest = self._add_availability_features(latest)
 
+        # Consistency
+        latest = self._add_consistency_features(latest, shift=False)
+
         # Per-player home/away splits
         latest = self._add_home_away_splits(latest, shift=False)
 
@@ -172,6 +178,7 @@ class FeatureBuilder:
         )
         base = self._add_set_piece_features(base)
         base = self._add_availability_features(base)
+        base = self._add_consistency_features(base, shift=False)
         base = self._add_home_away_splits(base, shift=False)
         base = self._add_injury_return_features(base)
         base = self._add_prediction_card_features(base)
@@ -251,12 +258,20 @@ class FeatureBuilder:
             "home_pts_avg", "away_pts_avg", "home_away_diff",
             "home_xgi_avg", "away_xgi_avg",
             # Matchup features: venue-specific team attack vs opponent defence
-            "team_goals_scored_venue_4",  # how many goals player's team scores at this venue
-            "team_goals_conceded_venue_4",  # how many goals they concede at this venue
-            "opp_goals_scored_venue_4",  # how many goals opponent scores at their venue
-            "opp_goals_conceded_venue_4",  # how many goals opponent concedes at their venue
-            "attacking_matchup",  # team attack @ venue vs opp defence @ venue
-            "defensive_matchup",  # team defence @ venue vs opp attack @ venue
+            "team_goals_scored_venue_4",
+            "team_goals_conceded_venue_4",
+            "opp_goals_scored_venue_4",
+            "opp_goals_conceded_venue_4",
+            "attacking_matchup",
+            "defensive_matchup",
+            # Wider window matchup (season-weighted: blend of 4-game and full season)
+            "opp_goals_conceded_venue_season",
+            "opp_goals_scored_venue_season",
+            "attacking_matchup_blended",
+            "defensive_matchup_blended",
+            # Consistency: how often does this player return points
+            "blank_rate_5", "blank_rate_10",
+            "return_rate_5", "return_rate_10",
         ]
 
     def _add_rolling_features(self, df: pd.DataFrame, shift: bool = True) -> pd.DataFrame:
@@ -289,6 +304,44 @@ class FeatureBuilder:
                 df[col_name] = series.groupby(df["player_id"]).transform(
                     lambda x: x.rolling(window, min_periods=1).mean()
                 )
+
+        return df
+
+    def _add_consistency_features(self, df: pd.DataFrame, shift: bool = True) -> pd.DataFrame:
+        """Track how consistently a player returns points.
+
+        A player averaging 5 pts from consistent 4-6 pt returns is more
+        valuable than one averaging 5 from alternating 0 and 10.
+        Blank = 2 pts or less. Return = 3 pts or more.
+        """
+        if "total_points" not in df.columns:
+            for col in ["blank_rate_5", "blank_rate_10", "return_rate_5", "return_rate_10"]:
+                df[col] = 0.5
+            return df
+
+        grouped = df.groupby("player_id")
+        pts = pd.to_numeric(df["total_points"], errors="coerce")
+        is_blank = (pts <= 2).astype(float)
+        is_return = (pts >= 3).astype(float)
+
+        if shift:
+            is_blank_shifted = grouped["total_points"].transform(
+                lambda x: (pd.to_numeric(x, errors="coerce") <= 2).astype(float).shift(1)
+            )
+            is_return_shifted = grouped["total_points"].transform(
+                lambda x: (pd.to_numeric(x, errors="coerce") >= 3).astype(float).shift(1)
+            )
+        else:
+            is_blank_shifted = is_blank
+            is_return_shifted = is_return
+
+        for window in [5, 10]:
+            df[f"blank_rate_{window}"] = is_blank_shifted.groupby(df["player_id"]).transform(
+                lambda x: x.rolling(window, min_periods=2).mean()
+            ).fillna(0.5)
+            df[f"return_rate_{window}"] = is_return_shifted.groupby(df["player_id"]).transform(
+                lambda x: x.rolling(window, min_periods=2).mean()
+            ).fillna(0.5)
 
         return df
 
@@ -587,14 +640,36 @@ class FeatureBuilder:
         for team_id in team_gw["team"].unique():
             t = team_gw[team_gw["team"] == team_id]
             for venue, is_home in [("home", True), ("away", False)]:
-                venue_data = t[t["was_home"] == is_home].tail(4)
-                if len(venue_data) >= 2:
-                    result[(int(team_id), venue)] = {
-                        "scored": round(float(venue_data["goals_scored"].mean()), 2),
-                        "conceded": round(float(venue_data["goals_conceded"].mean()), 2),
-                    }
+                venue_data = t[t["was_home"] == is_home]
+                recent = venue_data.tail(4)
+                season = venue_data
+
+                if len(recent) >= 2:
+                    r4_scored = float(recent["goals_scored"].mean())
+                    r4_conceded = float(recent["goals_conceded"].mean())
                 else:
-                    result[(int(team_id), venue)] = {"scored": 1.0, "conceded": 1.0}
+                    r4_scored = 1.0
+                    r4_conceded = 1.0
+
+                if len(season) >= 4:
+                    s_scored = float(season["goals_scored"].mean())
+                    s_conceded = float(season["goals_conceded"].mean())
+                else:
+                    s_scored = r4_scored
+                    s_conceded = r4_conceded
+
+                # Blended: 60% recent, 40% season (stabilises short-term noise)
+                bl_scored = 0.6 * r4_scored + 0.4 * s_scored
+                bl_conceded = 0.6 * r4_conceded + 0.4 * s_conceded
+
+                result[(int(team_id), venue)] = {
+                    "scored": round(r4_scored, 2),
+                    "conceded": round(r4_conceded, 2),
+                    "scored_season": round(s_scored, 2),
+                    "conceded_season": round(s_conceded, 2),
+                    "scored_blended": round(bl_scored, 2),
+                    "conceded_blended": round(bl_conceded, 2),
+                }
 
         return result
 
@@ -618,31 +693,45 @@ class FeatureBuilder:
                 "team_goals_conceded_venue_4": ts["conceded"],
                 "opp_goals_scored_venue_4": os["scored"],
                 "opp_goals_conceded_venue_4": os["conceded"],
-                "attacking_matchup": ts["scored"] + os["conceded"],  # high = good for attackers
-                "defensive_matchup": ts["conceded"] + os["scored"],  # low = good for defenders
+                "attacking_matchup": ts["scored"] + os["conceded"],
+                "defensive_matchup": ts["conceded"] + os["scored"],
+                "opp_goals_conceded_venue_season": os.get("conceded_season", os["conceded"]),
+                "opp_goals_scored_venue_season": os.get("scored_season", os["scored"]),
+                "attacking_matchup_blended": ts.get("scored_blended", ts["scored"]) + os.get("conceded_blended", os["conceded"]),
+                "defensive_matchup_blended": ts.get("conceded_blended", ts["conceded"]) + os.get("scored_blended", os["scored"]),
             })
+
+        all_cols = ["team_goals_scored_venue_4", "team_goals_conceded_venue_4",
+                    "opp_goals_scored_venue_4", "opp_goals_conceded_venue_4",
+                    "attacking_matchup", "defensive_matchup",
+                    "opp_goals_conceded_venue_season", "opp_goals_scored_venue_season",
+                    "attacking_matchup_blended", "defensive_matchup_blended"]
 
         if "opponent_team" in df.columns:
             matchup = df.apply(get_matchup, axis=1)
             for col in matchup.columns:
                 df[col] = matchup[col].values
         else:
-            for col in ["team_goals_scored_venue_4", "team_goals_conceded_venue_4",
-                        "opp_goals_scored_venue_4", "opp_goals_conceded_venue_4",
-                        "attacking_matchup", "defensive_matchup"]:
-                df[col] = 1.0 if "scored" in col or "matchup" in col else 1.0
+            for col in all_cols:
+                df[col] = 1.0
 
         return df
 
     def _add_prediction_matchup_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """Add venue-specific matchup features for predictions."""
         venue_stats = self._build_team_venue_stats()
+        defaults = {"scored": 1.0, "conceded": 1.0, "scored_season": 1.0,
+                     "conceded_season": 1.0, "scored_blended": 1.0, "conceded_blended": 1.0}
+
+        all_cols = ["team_goals_scored_venue_4", "team_goals_conceded_venue_4",
+                    "opp_goals_scored_venue_4", "opp_goals_conceded_venue_4",
+                    "attacking_matchup", "defensive_matchup",
+                    "opp_goals_conceded_venue_season", "opp_goals_scored_venue_season",
+                    "attacking_matchup_blended", "defensive_matchup_blended"]
 
         opp_col = "opponent_team_next" if "opponent_team_next" in df.columns else "opponent_team"
         if opp_col not in df.columns:
-            for col in ["team_goals_scored_venue_4", "team_goals_conceded_venue_4",
-                        "opp_goals_scored_venue_4", "opp_goals_conceded_venue_4",
-                        "attacking_matchup", "defensive_matchup"]:
+            for col in all_cols:
                 df[col] = 1.0
             return df
 
@@ -654,8 +743,8 @@ class FeatureBuilder:
             team_venue = "home" if is_home else "away"
             opp_venue = "away" if is_home else "home"
 
-            ts = venue_stats.get((team, team_venue), {"scored": 1.0, "conceded": 1.0})
-            os = venue_stats.get((opp, opp_venue), {"scored": 1.0, "conceded": 1.0})
+            ts = venue_stats.get((team, team_venue), defaults)
+            os = venue_stats.get((opp, opp_venue), defaults)
 
             return pd.Series({
                 "team_goals_scored_venue_4": ts["scored"],
@@ -664,6 +753,10 @@ class FeatureBuilder:
                 "opp_goals_conceded_venue_4": os["conceded"],
                 "attacking_matchup": ts["scored"] + os["conceded"],
                 "defensive_matchup": ts["conceded"] + os["scored"],
+                "opp_goals_conceded_venue_season": os.get("conceded_season", os["conceded"]),
+                "opp_goals_scored_venue_season": os.get("scored_season", os["scored"]),
+                "attacking_matchup_blended": ts.get("scored_blended", ts["scored"]) + os.get("conceded_blended", os["conceded"]),
+                "defensive_matchup_blended": ts.get("conceded_blended", ts["conceded"]) + os.get("scored_blended", os["scored"]),
             })
 
         matchup = df.apply(get_matchup, axis=1)
