@@ -139,6 +139,8 @@ def main():
             "returning_from_injury": bool(row.get("returning_from_injury", False)),
             "n_fixtures_in_gw": int(safe_float(row.get("n_fixtures_in_gw", 1), 1)),
             "status": str(row.get("status", "a") or "a"),
+            "news": str(row.get("news", "") or "")[:500],  # cap length
+            "news_added": str(row.get("news_added", "") or ""),
         })
 
     # Upsert in batches
@@ -250,6 +252,43 @@ def main():
             print("  No odds fetched (API key not set or no matches)")
     except Exception as e:
         print(f"  Odds fetch failed: {e}")
+
+    # 7c. Scrape team news
+    print("\n--- Scraping team news ---")
+    try:
+        from fpl.team_news import scrape_team_news, summarise_mentions
+
+        players_df = pd.read_parquet("data/processed/players.parquet")
+        player_names = players_df["web_name"].dropna().unique().tolist()
+
+        mentions = scrape_team_news(player_names, hours_back=72)
+        summary = summarise_mentions(mentions)
+
+        # Clear old news
+        sb.table("team_news").delete().neq("player_name", "").execute()
+
+        news_rows = []
+        for name, data in summary.items():
+            sources = data.get("sources", [])
+            first_source = sources[0] if sources else {}
+            news_rows.append({
+                "player_name": name,
+                "primary_status": data.get("primary_status") or "",
+                "all_statuses": ",".join(data.get("all_statuses", [])),
+                "context": (first_source.get("context") or "")[:500],
+                "source": first_source.get("source") or "",
+                "article_url": first_source.get("url") or "",
+            })
+
+        if news_rows:
+            for i in range(0, len(news_rows), batch_size):
+                batch = news_rows[i:i + batch_size]
+                sb.table("team_news").upsert(batch).execute()
+            print(f"  Uploaded team news for {len(news_rows)} players")
+        else:
+            print("  No team news extracted")
+    except Exception as e:
+        print(f"  Team news scrape failed: {e}")
 
     # 8. Upload teams
     print("\n--- Uploading teams ---")

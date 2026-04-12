@@ -29,6 +29,8 @@ CREATE TABLE IF NOT EXISTS predictions (
   suspension_risk    BOOLEAN DEFAULT FALSE,
   returning_from_injury BOOLEAN DEFAULT FALSE,
   n_fixtures_in_gw   INT DEFAULT 1,
+  news               TEXT,
+  news_added         TEXT,
   updated_at         TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -88,6 +90,21 @@ CREATE TABLE IF NOT EXISTS match_odds (
 
 ALTER TABLE match_odds ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Public read access" ON match_odds FOR SELECT USING (true);
+
+-- Team news scraped from RSS feeds
+CREATE TABLE IF NOT EXISTS team_news (
+  player_name   TEXT NOT NULL,
+  primary_status TEXT,
+  all_statuses  TEXT,
+  context       TEXT,
+  source        TEXT,
+  article_url   TEXT,
+  scraped_at    TIMESTAMPTZ DEFAULT NOW(),
+  PRIMARY KEY (player_name)
+);
+
+ALTER TABLE team_news ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Public read access" ON team_news FOR SELECT USING (true);
 
 -- Prediction log: stores what we predicted vs what happened
 CREATE TABLE IF NOT EXISTS prediction_log (
