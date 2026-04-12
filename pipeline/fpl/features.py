@@ -48,6 +48,9 @@ class FeatureBuilder:
         # Consistency (blank/return rate)
         df = self._add_consistency_features(df, shift=True)
 
+        # Season-long priors
+        df = self._add_season_priors(df, shift=True)
+
         # Per-player home/away splits
         df = self._add_home_away_splits(df, shift=True)
 
@@ -119,6 +122,9 @@ class FeatureBuilder:
         # Consistency
         latest = self._add_consistency_features(latest, shift=False)
 
+        # Season priors
+        latest = self._add_season_priors(latest, shift=False)
+
         # Per-player home/away splits
         latest = self._add_home_away_splits(latest, shift=False)
 
@@ -185,6 +191,7 @@ class FeatureBuilder:
         base = self._add_set_piece_features(base)
         base = self._add_availability_features(base)
         base = self._add_consistency_features(base, shift=False)
+        base = self._add_season_priors(base, shift=False)
         base = self._add_home_away_splits(base, shift=False)
         base = self._add_injury_return_features(base)
         base = self._add_prediction_card_features(base)
@@ -265,6 +272,10 @@ class FeatureBuilder:
             # Per-player home/away splits
             "home_pts_avg", "away_pts_avg", "home_away_diff",
             "home_xgi_avg", "away_xgi_avg",
+            # Season-long priors (catches returning players)
+            "season_avg_points", "season_avg_minutes",
+            "season_total_minutes", "points_vs_season",
+            "regressed_points", "regressed_minutes",
             # Matchup features: venue-specific team attack vs opponent defence
             "team_goals_scored_venue_4",
             "team_goals_conceded_venue_4",
@@ -886,6 +897,86 @@ class FeatureBuilder:
                     pred = self._predict_scoreline(team, opp, is_home, stats)
                     for k, v in pred.items():
                         df.at[idx, k] = v
+
+        return df
+
+    def _add_season_priors(self, df: pd.DataFrame, shift: bool = True) -> pd.DataFrame:
+        """Add season-long averages as priors.
+
+        Catches players returning from absence - their recent 3-5 games might
+        show zero points but their season average still reflects true quality.
+
+        Key insight: regressed_points = weighted blend of recent + season.
+        For players with strong season history, recent zeros are treated as
+        temporary, not reflective of true quality.
+        """
+        if "total_points" not in df.columns:
+            for col in ["season_avg_points", "season_avg_minutes", "season_total_minutes",
+                         "points_vs_season", "regressed_points", "regressed_minutes"]:
+                df[col] = 0.0
+            return df
+
+        def calc(group):
+            pts = pd.to_numeric(group["total_points"], errors="coerce")
+            mins = pd.to_numeric(group["minutes"], errors="coerce")
+            n = len(group)
+
+            season_pts = [0.0] * n
+            season_mins = [0.0] * n
+            total_mins = [0.0] * n
+            pts_vs_season = [0.0] * n
+            regressed_pts = [0.0] * n
+            regressed_mins = [0.0] * n
+
+            for i in range(n):
+                end = i if shift else i + 1
+                if end == 0:
+                    continue
+
+                past_pts = pts.iloc[:end]
+                past_mins = mins.iloc[:end]
+
+                # Only count games with appearances for avg
+                played = past_mins > 0
+                if played.sum() >= 3:
+                    s_pts = past_pts[played].mean()
+                    s_mins = past_mins[played].mean()
+                else:
+                    s_pts = past_pts.mean() if len(past_pts) > 0 else 0
+                    s_mins = past_mins.mean() if len(past_mins) > 0 else 0
+
+                season_pts[i] = s_pts
+                season_mins[i] = s_mins
+                total_mins[i] = past_mins.sum()
+
+                # Recent form (last 3)
+                recent_pts = past_pts.tail(3).mean() if len(past_pts) >= 1 else 0
+                recent_mins = past_mins.tail(3).mean() if len(past_mins) >= 1 else 0
+
+                pts_vs_season[i] = recent_pts - s_pts
+
+                # Regressed values: weight depends on how much season history we have
+                # More season minutes = trust season mean more when recent is anomalous
+                n_games = len(past_pts)
+                season_weight = min(0.5, n_games / 30)  # up to 50% weight on season
+                recent_weight = 1.0 - season_weight
+
+                regressed_pts[i] = recent_weight * recent_pts + season_weight * s_pts
+                regressed_mins[i] = recent_weight * recent_mins + season_weight * s_mins
+
+            return pd.DataFrame({
+                "season_avg_points": season_pts,
+                "season_avg_minutes": season_mins,
+                "season_total_minutes": total_mins,
+                "points_vs_season": pts_vs_season,
+                "regressed_points": regressed_pts,
+                "regressed_minutes": regressed_mins,
+            }, index=group.index)
+
+        result = df.groupby("player_id", group_keys=False).apply(calc)
+        for col in ["season_avg_points", "season_avg_minutes", "season_total_minutes",
+                     "points_vs_season", "regressed_points", "regressed_minutes"]:
+            df[col] = result[col].values
 
         return df
 
