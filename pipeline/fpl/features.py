@@ -54,6 +54,9 @@ class FeatureBuilder:
         # Venue-specific matchup features
         df = self._add_matchup_features(df)
 
+        # Scoreline predictions (Poisson-based)
+        df = self._add_scoreline_features(df, is_training=True)
+
         # Opponent defensive weakness
         df = self._add_opponent_defensive_features(df)
 
@@ -121,6 +124,9 @@ class FeatureBuilder:
 
         # Venue-specific matchup
         latest = self._add_prediction_matchup_features(latest)
+
+        # Scoreline predictions
+        latest = self._add_scoreline_features(latest, is_training=False)
 
         # Injury return detection
         latest = self._add_injury_return_features(latest)
@@ -200,6 +206,7 @@ class FeatureBuilder:
             "team_goals_scored_venue_4", "team_goals_conceded_venue_4",
             "opp_goals_scored_venue_4", "opp_goals_conceded_venue_4",
             "attacking_matchup", "defensive_matchup",
+            "pred_team_xg", "pred_opp_xg", "pred_cs_prob", "pred_win_prob",
         ]
         base_clean = base.drop(
             columns=[c for c in fixture_cols_to_drop if c in base.columns],
@@ -212,6 +219,7 @@ class FeatureBuilder:
             gw_features["next_gw"] = gw
             gw_features = self._add_prediction_fixture_features(gw_features, gw)
             gw_features = self._add_prediction_matchup_features(gw_features)
+            gw_features = self._add_scoreline_features(gw_features, is_training=False)
             gw_features = self._add_prediction_opponent_defensive(gw_features)
             result[gw] = gw_features
 
@@ -272,6 +280,8 @@ class FeatureBuilder:
             # Consistency: how often does this player return points
             "blank_rate_5", "blank_rate_10",
             "return_rate_5", "return_rate_10",
+            # Scoreline predictions (Poisson-based match model)
+            "pred_team_xg", "pred_opp_xg", "pred_cs_prob", "pred_win_prob",
         ]
 
     def _add_rolling_features(self, df: pd.DataFrame, shift: bool = True) -> pd.DataFrame:
@@ -762,6 +772,120 @@ class FeatureBuilder:
         matchup = df.apply(get_matchup, axis=1)
         for col in matchup.columns:
             df[col] = matchup[col].values
+
+        return df
+
+    def _build_match_rolling(self, upto_gw: int | None = None) -> dict:
+        """Build rolling team stats from match-level data for scoreline prediction."""
+        import math as _math
+
+        h = self.history.copy()
+        match = h.groupby(["team", "round", "opponent_team", "was_home"]).agg({
+            "goals_scored": "sum",
+            "goals_conceded": "first",
+            "expected_goals": lambda x: pd.to_numeric(x, errors="coerce").sum(),
+            "expected_goals_conceded": lambda x: pd.to_numeric(x, errors="coerce").mean(),
+        }).reset_index()
+
+        if upto_gw is not None:
+            match = match[match["round"] < upto_gw]
+
+        match = match.sort_values(["team", "round"])
+
+        stats = {}
+        for team_id in match["team"].unique():
+            t = match[match["team"] == team_id]
+            home = t[t["was_home"] == True]
+            away = t[t["was_home"] == False]
+
+            stats[int(team_id)] = {
+                "home_scored": float(home["goals_scored"].tail(6).mean()) if len(home) > 0 else 1.0,
+                "home_conceded": float(home["goals_conceded"].tail(6).mean()) if len(home) > 0 else 1.0,
+                "home_xg": float(home["expected_goals"].tail(6).mean()) if len(home) > 0 else 1.0,
+                "home_xgc": float(home["expected_goals_conceded"].tail(6).mean()) if len(home) > 0 else 1.0,
+                "away_scored": float(away["goals_scored"].tail(6).mean()) if len(away) > 0 else 1.0,
+                "away_conceded": float(away["goals_conceded"].tail(6).mean()) if len(away) > 0 else 1.0,
+                "away_xg": float(away["expected_goals"].tail(6).mean()) if len(away) > 0 else 1.0,
+                "away_xgc": float(away["expected_goals_conceded"].tail(6).mean()) if len(away) > 0 else 1.0,
+                "season_scored": float(t["goals_scored"].mean()) if len(t) > 0 else 1.0,
+                "season_conceded": float(t["goals_conceded"].mean()) if len(t) > 0 else 1.0,
+            }
+        return stats
+
+    def _predict_scoreline(self, team: int, opp: int, is_home: bool, team_stats: dict) -> dict:
+        """Predict match outcome from team's perspective using Poisson model."""
+        import math as _math
+
+        h = team_stats.get(team if is_home else opp, {})
+        a = team_stats.get(opp if is_home else team, {})
+
+        def get(d, k, default=1.0):
+            return d.get(k, default) if d else default
+
+        h_attack = 0.5 * get(h, "home_scored") + 0.3 * get(h, "home_xg") + 0.2 * get(h, "season_scored")
+        a_defence = 0.5 * get(a, "away_conceded") + 0.3 * get(a, "away_xgc") + 0.2 * get(a, "season_conceded")
+        home_xg = (h_attack + a_defence) / 2
+
+        a_attack = 0.5 * get(a, "away_scored") + 0.3 * get(a, "away_xg") + 0.2 * get(a, "season_scored")
+        h_defence = 0.5 * get(h, "home_conceded") + 0.3 * get(h, "home_xgc") + 0.2 * get(h, "season_conceded")
+        away_xg = (a_attack + h_defence) / 2
+
+        if is_home:
+            team_xg, opp_xg = home_xg, away_xg
+        else:
+            team_xg, opp_xg = away_xg, home_xg
+
+        team_cs_prob = max(0.03, min(0.90, np.exp(-opp_xg)))
+
+        win_prob = 0.0
+        for i in range(6):
+            for j in range(6):
+                if i > j:
+                    p_i = (team_xg ** i) * np.exp(-team_xg) / _math.factorial(i)
+                    p_j = (opp_xg ** j) * np.exp(-opp_xg) / _math.factorial(j)
+                    win_prob += p_i * p_j
+        win_prob = min(0.95, max(0.05, win_prob))
+
+        return {
+            "pred_team_xg": round(team_xg, 2),
+            "pred_opp_xg": round(opp_xg, 2),
+            "pred_cs_prob": round(team_cs_prob, 3),
+            "pred_win_prob": round(win_prob, 3),
+        }
+
+    def _add_scoreline_features(self, df: pd.DataFrame, is_training: bool = True) -> pd.DataFrame:
+        """Add Poisson scoreline predictions per row."""
+        df = df.copy()
+        for col in ["pred_team_xg", "pred_opp_xg", "pred_cs_prob", "pred_win_prob"]:
+            df[col] = 0.0
+
+        if is_training and "round" in df.columns:
+            # For training, use rolling stats as of each GW
+            for gw in sorted(df["round"].unique()):
+                stats = self._build_match_rolling(upto_gw=int(gw))
+                mask = df["round"] == gw
+                for idx in df[mask].index:
+                    row = df.loc[idx]
+                    team = int(row.get("team", 0))
+                    opp = int(row.get("opponent_team", 0))
+                    is_home = bool(row.get("was_home", False))
+                    if team and opp:
+                        pred = self._predict_scoreline(team, opp, is_home, stats)
+                        for k, v in pred.items():
+                            df.at[idx, k] = v
+        else:
+            # For prediction, use latest rolling stats
+            stats = self._build_match_rolling(upto_gw=None)
+            opp_col = "opponent_team_next" if "opponent_team_next" in df.columns else "opponent_team"
+            for idx in df.index:
+                row = df.loc[idx]
+                team = int(row.get("team", 0))
+                opp = int(row.get(opp_col, 0))
+                is_home = bool(row.get("is_home", row.get("was_home", False)))
+                if team and opp:
+                    pred = self._predict_scoreline(team, opp, is_home, stats)
+                    for k, v in pred.items():
+                        df.at[idx, k] = v
 
         return df
 

@@ -68,6 +68,27 @@ CREATE TABLE IF NOT EXISTS teams (
   strength_defence_away INT
 );
 
+-- Match odds from The Odds API
+CREATE TABLE IF NOT EXISTS match_odds (
+  fixture_id    INT,
+  gameweek      INT NOT NULL,
+  team_h        INT NOT NULL,
+  team_a        INT NOT NULL,
+  home_win_prob REAL,
+  draw_prob     REAL,
+  away_win_prob REAL,
+  over_2_5_prob REAL,
+  home_xg       REAL,
+  away_xg       REAL,
+  home_cs_prob  REAL,
+  away_cs_prob  REAL,
+  updated_at    TIMESTAMPTZ DEFAULT NOW(),
+  PRIMARY KEY (gameweek, team_h, team_a)
+);
+
+ALTER TABLE match_odds ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Public read access" ON match_odds FOR SELECT USING (true);
+
 -- Prediction log: stores what we predicted vs what happened
 CREATE TABLE IF NOT EXISTS prediction_log (
   player_id     INT NOT NULL,

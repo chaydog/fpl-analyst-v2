@@ -195,6 +195,62 @@ def main():
         sb.table("fixtures").upsert(batch).execute()
     print(f"  Uploaded {len(fixture_rows)} fixtures")
 
+    # 7b. Fetch and upload match odds
+    print("\n--- Fetching match odds ---")
+    odds_by_fixture = {}
+    try:
+        from fpl.odds import fetch_match_odds, normalize_team_name
+        odds = fetch_match_odds()
+
+        # Build team name -> id lookup
+        team_name_to_id = {}
+        for t in bootstrap["teams"]:
+            team_name_to_id[normalize_team_name(t["short_name"])] = int(t["id"])
+
+        odds_rows = []
+        for (home_name, away_name), data in odds.items():
+            home_id = team_name_to_id.get(home_name)
+            away_id = team_name_to_id.get(away_name)
+            if not home_id or not away_id:
+                continue
+
+            # Find the fixture
+            gw = None
+            fid = None
+            for f in fixtures:
+                if f.get("team_h") == home_id and f.get("team_a") == away_id:
+                    gw = f.get("event")
+                    fid = f.get("id")
+                    break
+
+            if gw is None:
+                continue
+
+            odds_rows.append({
+                "fixture_id": fid,
+                "gameweek": int(gw),
+                "team_h": home_id,
+                "team_a": away_id,
+                "home_win_prob": safe_float(data.get("home_win_prob"), None),
+                "draw_prob": safe_float(data.get("draw_prob"), None),
+                "away_win_prob": safe_float(data.get("away_win_prob"), None),
+                "over_2_5_prob": safe_float(data.get("over_2_5_prob"), None),
+                "home_xg": safe_float(data.get("home_xg"), None),
+                "away_xg": safe_float(data.get("away_xg"), None),
+                "home_cs_prob": safe_float(data.get("home_cs_prob"), None),
+                "away_cs_prob": safe_float(data.get("away_cs_prob"), None),
+            })
+
+        if odds_rows:
+            for i in range(0, len(odds_rows), batch_size):
+                batch = odds_rows[i:i + batch_size]
+                sb.table("match_odds").upsert(batch).execute()
+            print(f"  Uploaded odds for {len(odds_rows)} matches")
+        else:
+            print("  No odds fetched (API key not set or no matches)")
+    except Exception as e:
+        print(f"  Odds fetch failed: {e}")
+
     # 8. Upload teams
     print("\n--- Uploading teams ---")
     team_rows = []
