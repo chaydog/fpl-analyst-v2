@@ -48,10 +48,14 @@ export async function GET(
     }
     const picks = picksData.picks as Array<{ element: number; selling_price?: number }>;
 
-    // Calculate budget: bank + sum of selling prices
-    const bank = latestEvent?.bank ?? 0;
+    // Calculate budget from entry_history: value (squad worth) + bank
+    // For completed GWs, selling_price isn't returned so we use squad value
+    const entryHistory = picksData.entry_history as { bank: number; value: number } | undefined;
+    const bank = entryHistory?.bank ?? latestEvent?.bank ?? 0;
+    const squad_value = entryHistory?.value ?? 0;
+    // Fall back to summing selling_prices if available (current GW), else use squad value
     const selling_total = picks.reduce((s, p) => s + (p.selling_price || 0), 0);
-    const budget = bank + selling_total; // in 0.1m units
+    const budget = bank + (selling_total > 0 ? selling_total : squad_value); // in 0.1m units
 
     // Build news lookup
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -86,13 +90,9 @@ export async function GET(
     // Default target GWs: next 3 (good for WC + BB planning)
     let targetGws = customGws;
     if (!targetGws || targetGws.length === 0) {
-      const { data: pipelineRun } = await getSupabase()
-        .from("pipeline_runs")
-        .select("next_gw")
-        .order("run_at", { ascending: false })
-        .limit(1)
-        .single();
-      const nextGw = pipelineRun?.next_gw ?? latestGw + 1;
+      // Find next unfinished GW from gw_predictions - should be the upcoming one
+      const upcomingGws = Object.keys(gwPredictions).map(Number).sort((a, b) => a - b);
+      const nextGw = upcomingGws[0] || latestGw + 1;
       targetGws = [nextGw, nextGw + 1, nextGw + 2];
     }
 
