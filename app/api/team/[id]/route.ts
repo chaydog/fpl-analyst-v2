@@ -15,16 +15,23 @@ export async function GET(
   const teamId = parseInt(id);
 
   try {
-    // Fetch predictions from Supabase
-    const { data: predictions, error: predError } = await getSupabase()
-      .from("predictions")
-      .select("*");
+    // Fetch predictions and team news from Supabase
+    const [{ data: predictions, error: predError }, { data: teamNews }] = await Promise.all([
+      getSupabase().from("predictions").select("*"),
+      getSupabase().from("team_news").select("*"),
+    ]);
 
     if (predError || !predictions?.length) {
       return NextResponse.json(
         { error: "Predictions not available. Pipeline may not have run yet." },
         { status: 503 }
       );
+    }
+
+    // Build news lookup by player name (lowercased for matching)
+    const newsByName = new Map<string, Record<string, unknown>>();
+    for (const n of teamNews || []) {
+      newsByName.set((n.player_name as string).toLowerCase(), n);
     }
 
     // Fetch user's team from FPL API
@@ -69,10 +76,14 @@ export async function GET(
     const playerMap = new Map<number, Player>();
     for (const p of predictions) {
       const pos = POS_MAP[p.element_type];
+      const news = newsByName.get((p.web_name as string).toLowerCase());
       playerMap.set(p.player_id, {
         ...p,
         position: pos,
         kit_url: getKitUrl(p.team_code, p.element_type === 1),
+        news_status: news ? news.primary_status : null,
+        news_context: news ? news.context : null,
+        news_source: news ? news.source : null,
       });
     }
 

@@ -11,6 +11,9 @@ interface PitchPlayer {
   predicted_pts_1gw: number;
   predicted_pts_5gw: number;
   role?: string;
+  news_status?: string | null;
+  news_context?: string | null;
+  chance_of_playing?: number;
 }
 
 interface PitchProps {
@@ -140,6 +143,14 @@ function PlayerCard({
               : 'bg-white/90 text-[var(--text)]'
           }`}>
             {p.role}
+          </div>
+        )}
+        {p.news_status && p.news_status !== 'expected_start' && p.news_status !== 'returning' && (
+          <div
+            className="absolute -top-1.5 -left-1.5 w-[16px] h-[16px] rounded-full flex items-center justify-center shadow-sm bg-[var(--red)] text-white text-[9px] font-bold"
+            title={p.news_context || p.news_status}
+          >
+            !
           </div>
         )}
       </div>
