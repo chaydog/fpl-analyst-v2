@@ -3,6 +3,7 @@ import { getSupabase } from "@/lib/supabase";
 import { getEntry, getEntryHistory, getPicks, getKitUrl } from "@/lib/fpl-api";
 import { selectStarting11 } from "@/lib/optimizer";
 import { recommendTransfers } from "@/lib/transfers";
+import { auditSquad } from "@/lib/audit";
 import { getChipsAvailable, calculateFreeTransfers, detectDgwBgw, planChips } from "@/lib/chips";
 import { POS_MAP } from "@/lib/types";
 import type { Player, SquadPlayer, Horizon, ReplacementOption } from "@/lib/types";
@@ -132,6 +133,10 @@ export async function GET(
     const recs1gw = recommendTransfers(squad, allPlayers, freeTransfers, bank, 1);
     const recs5gw = recommendTransfers(squad, allPlayers, freeTransfers, bank, 5);
 
+    // Full squad audit for both horizons
+    const audit_1gw = auditSquad(squad, allPlayers, newsByName, 1, bank);
+    const audit_5gw = auditSquad(squad, allPlayers, newsByName, 5, bank);
+
     // Chips
     const chips = history.chips || [];
     const chipsAvailable = getChipsAvailable(chips, nextGw);
@@ -251,6 +256,8 @@ export async function GET(
       vice_captain_id_5gw: lineup5.vice_captain_id,
       transfers_1gw: recs1gw,
       transfers_5gw: recs5gw,
+      audit_1gw,
+      audit_5gw,
       top_players: topPlayers,
       chips_available: chipsAvailable,
       chip_recommendations: chipRecs,

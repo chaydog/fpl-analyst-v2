@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import type { Horizon } from "@/lib/types";
 import TransferRecs from "@/components/TransferRecs";
+import SquadAudit from "@/components/SquadAudit";
 import ChipAdvisor from "@/components/ChipAdvisor";
 import TopPlayers from "@/components/TopPlayers";
 import TransferSimulator from "@/components/TransferSimulator";
@@ -239,6 +240,10 @@ export default function Dashboard() {
             <div className="mt-5">
               {activeTab === "transfers" && (
                 <div className="space-y-5 animate-in">
+                  <SquadAudit
+                    audit={horizon === 1 ? d.audit_1gw : d.audit_5gw}
+                    horizon={horizon}
+                  />
                   <TransferRecs
                     transfers={transfers}
                     freeTransfers={d.free_transfers as number}
