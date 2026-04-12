@@ -4,7 +4,7 @@ import { getEntry, getEntryHistory, getPicks, getKitUrl } from "@/lib/fpl-api";
 import { selectStarting11 } from "@/lib/optimizer";
 import { recommendTransfers } from "@/lib/transfers";
 import { auditSquad } from "@/lib/audit";
-import { getChipsAvailable, calculateFreeTransfers, detectDgwBgw, planChips } from "@/lib/chips";
+import { getChipsAvailable, calculateFreeTransfers, detectDgwBgw, detectPostponedFixtures, planChips } from "@/lib/chips";
 import { POS_MAP } from "@/lib/types";
 import type { Player, SquadPlayer, Horizon, ReplacementOption } from "@/lib/types";
 
@@ -151,6 +151,22 @@ export async function GET(
     }));
     const schedule = detectDgwBgw(fixtureList, nextGw);
 
+    // Detect postponed fixtures (no GW assigned yet - likely reschedule targets)
+    const { data: teamsData } = await getSupabase().from("teams").select("id, short_name");
+    const teamShortLookup: Record<number, string> = {};
+    for (const t of (teamsData || [])) {
+      teamShortLookup[t.id as number] = t.short_name as string;
+    }
+    const postponedFixtures = detectPostponedFixtures(
+      (fixtures || []).map((f) => ({
+        gameweek: f.gameweek,
+        team_h: f.team_h,
+        team_a: f.team_a,
+        finished: f.finished,
+      })),
+      teamShortLookup,
+    );
+
     // Build fixture ticker: next 5 fixtures per player in squad
     const fixtureTicker: Record<number, Array<{ gw: number; opponent: string; difficulty: number; is_home: boolean }>> = {};
     const upcomingFixtures = (fixtures || [])
@@ -264,6 +280,7 @@ export async function GET(
       chip_this_week: chipThisWeek,
       gw_schedule: schedule,
       fixture_ticker: fixtureTicker,
+      postponed_fixtures: postponedFixtures,
       deadline_time: deadlineTime,
       updated_at: updatedAt,
     });

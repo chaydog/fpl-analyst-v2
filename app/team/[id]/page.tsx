@@ -274,6 +274,7 @@ export default function Dashboard() {
                     chipThisWeek={d.chip_this_week as Record<string, unknown>}
                     gwSchedule={d.gw_schedule as Record<string, unknown>[]}
                     nextGw={d.next_gw as number}
+                    postponedFixtures={d.postponed_fixtures as Array<{ home: string; away: string }>}
                   />
                 </div>
               )}

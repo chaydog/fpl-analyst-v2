@@ -10,6 +10,7 @@ interface ChipAdvisorProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   gwSchedule: any[];
   nextGw: number;
+  postponedFixtures?: Array<{ home: string; away: string }>;
 }
 
 const CHIP_ICONS: Record<string, string> = {
@@ -30,7 +31,7 @@ const CHIP_LABELS: Record<string, string> = {
 };
 
 export default function ChipAdvisor({
-  chipsAvailable, chipRecommendations, chipThisWeek, gwSchedule, nextGw,
+  chipsAvailable, chipRecommendations, chipThisWeek, gwSchedule, nextGw, postponedFixtures = [],
 }: ChipAdvisorProps) {
   const hasChips = Object.values(chipsAvailable).some((c) => c.available);
 
@@ -139,6 +140,29 @@ export default function ChipAdvisor({
               </div>
             );
           })}
+        </div>
+      )}
+
+      {postponedFixtures.length > 0 && (
+        <div className="border-t border-[var(--border)]">
+          <div className="px-5 pt-3 pb-1">
+            <div className="text-[11px] font-semibold uppercase text-[var(--text-muted)]">
+              Postponed Fixtures (may reschedule to create extra DGW)
+            </div>
+          </div>
+          {postponedFixtures.map((f, i) => (
+            <div key={i} className="flex items-center gap-3 px-5 py-2.5 border-b border-[var(--border)] last:border-b-0">
+              <span className="text-xs font-bold px-2.5 py-1 rounded-md min-w-[50px] text-center bg-[rgba(251,191,36,0.2)] text-[var(--yellow)]">
+                TBD
+              </span>
+              <span className="text-xs text-[var(--text)]">
+                {f.home} vs {f.away}
+              </span>
+              <span className="text-xs text-[var(--text-muted)]">
+                - typically rescheduled into GW36/37
+              </span>
+            </div>
+          ))}
         </div>
       )}
     </div>

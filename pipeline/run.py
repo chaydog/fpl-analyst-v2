@@ -177,17 +177,18 @@ def main():
     print("\n--- Uploading fixtures ---")
     fixture_rows = []
     for f in fixtures:
-        if f.get("event") is None:
+        # Skip only finished fixtures without event (shouldn't happen anyway)
+        if f.get("event") is None and f.get("finished"):
             continue
         fixture_rows.append({
             "id": int(f["id"]),
-            "gameweek": int(f["event"]),
+            "gameweek": int(f["event"]) if f.get("event") is not None else None,
             "team_h": int(f["team_h"]),
             "team_a": int(f["team_a"]),
             "team_h_name": teams.get(f["team_h"], {}).get("short_name", ""),
             "team_a_name": teams.get(f["team_a"], {}).get("short_name", ""),
-            "team_h_difficulty": int(f.get("team_h_difficulty", 3)),
-            "team_a_difficulty": int(f.get("team_a_difficulty", 3)),
+            "team_h_difficulty": int(f.get("team_h_difficulty", 3)) if f.get("team_h_difficulty") else 3,
+            "team_a_difficulty": int(f.get("team_a_difficulty", 3)) if f.get("team_a_difficulty") else 3,
             "finished": bool(f.get("finished", False)),
         })
 

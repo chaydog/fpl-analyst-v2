@@ -104,6 +104,18 @@ function analyseGWFixtures(fixtures: Fixture[], gw: number): GWFixtureInfo {
   return { type, doubleTeams, blankTeams, totalFixtures: gwFixtures.length };
 }
 
+export function detectPostponedFixtures(
+  fixtures: Array<{ gameweek: number | null; team_h: number; team_a: number; finished: boolean }>,
+  teamLookup: Record<number, string>
+): Array<{ home: string; away: string }> {
+  return fixtures
+    .filter((f) => f.gameweek === null && !f.finished)
+    .map((f) => ({
+      home: teamLookup[f.team_h] || `T${f.team_h}`,
+      away: teamLookup[f.team_a] || `T${f.team_a}`,
+    }));
+}
+
 export function detectDgwBgw(fixtures: Fixture[], nextGw: number, count: number = 8): GWScheduleItem[] {
   const result: GWScheduleItem[] = [];
   for (let gw = nextGw; gw < Math.min(nextGw + count, TOTAL_GWS + 1); gw++) {
