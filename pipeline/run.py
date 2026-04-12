@@ -139,8 +139,6 @@ def main():
             "returning_from_injury": bool(row.get("returning_from_injury", False)),
             "n_fixtures_in_gw": int(safe_float(row.get("n_fixtures_in_gw", 1), 1)),
             "status": str(row.get("status", "a") or "a"),
-            "news": str(row.get("news", "") or "")[:500],  # cap length
-            "news_added": str(row.get("news_added", "") or ""),
         })
 
     # Upsert in batches
